@@ -6,6 +6,7 @@
     <context:component-scan base-package="com.company.statload"/>
     <bean id="cubaDataSource_dbstat" class="com.haulmont.cuba.core.sys.CubaDataSourceFactoryBean">
         <property name="storeName" value="dbstat"/>
+        <property name="jndiNameAppProperty" value="cuba.dataSourceJndiName_dbstat"/>
     </bean>
     <bean id="entityManagerFactory_dbstat" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean"
           lazy-init="false">

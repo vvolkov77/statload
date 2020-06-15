@@ -11,7 +11,7 @@ create table STATLOAD_REPORT (
     NAME_SHORT varchar(50),
     NAME_LONG text,
     VID integer not null,
-    ID_STAT uuid not null,
+    ID_STAT uuid,
     STAT_SCHEMA varchar(50),
     --
     primary key (ID)
