@@ -30,7 +30,7 @@ public class DBStatSyncServiceBean implements DBStatSyncService {
 
     @Override
     public String FullSync(){
-        setStatus("");  
+        setStatus("");
         setStatus(FullSyncStatPokaz());
         setStatus(getStatus() + "\n"+FullSyncStatForm());
         setStatus(getStatus() + "\n"+FullSyncStatSprav());
