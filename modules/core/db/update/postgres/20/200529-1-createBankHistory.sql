@@ -1,0 +1,30 @@
+create table BANK_HISTORY (
+    ID bigint,
+    --
+    "DO" boolean,
+    ACCOUNTANT varchar(100),
+    ALT boolean,
+    CHAIRMAN varchar(50),
+    CITY bigint,
+    "DATE_BEGIN" date not null,
+    "DATE_CLOSE" date,
+    FILIAL integer,
+    FUND boolean,
+    "ID_BANK" bigint not null,
+    "ID_ORGLAW_FORM" bigint,
+    "KCMR_MAIL" varchar(8),
+    KURATOR bigint,
+    LARGE boolean,
+    MFO varchar(30),
+    "MFO_HEAD" varchar(30) not null,
+    NAME varchar(256),
+    "NAME_KAZ" varchar(256),
+    REGION bigint,
+    REGNUM varchar(9),
+    STAND boolean,
+    "TELIX_MAIL" varchar(8),
+    "TYPE" boolean,
+    UPR boolean,
+    --
+    primary key (ID)
+);

@@ -1,0 +1,2 @@
+alter table STATLOAD_REPORT add constraint FK_STATLOAD_REPORT_ON_ID_STAT foreign key (ID_STAT) references STATLOAD_STAT_FORM(ID);
+create index IDX_STATLOAD_REPORT_ON_ID_STAT on STATLOAD_REPORT (ID_STAT);

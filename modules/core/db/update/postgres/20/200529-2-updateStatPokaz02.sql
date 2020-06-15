@@ -1,0 +1,1 @@
+create unique index IDX_STATLOAD_STAT_POKAZ_UK_ID_POKAZ on STATLOAD_STAT_POKAZ (ID_POKAZ) where DELETE_TS is null ;

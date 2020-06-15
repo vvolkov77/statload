@@ -1,0 +1,1 @@
+drop table if exists STATLOAD_STATLOAD_REP_VAR2__U34598 cascade ;

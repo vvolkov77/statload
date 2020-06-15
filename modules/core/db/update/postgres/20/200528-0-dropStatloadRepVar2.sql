@@ -1,0 +1,1 @@
+alter table statload_statload_rep_var2 rename to STATLOAD_STATLOAD_REP_VAR2__U34598 ;

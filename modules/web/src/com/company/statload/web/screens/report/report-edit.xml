@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<window xmlns="http://schemas.haulmont.com/cuba/screen/window.xsd"
+        caption="msg://editorCaption"
+        focusComponent="form"
+        messagesPack="com.company.statload.web.screens.report">
+    <data>
+        <instance id="reportDc"
+                  class="com.company.statload.entity.Report"
+                  view="report-view-browse">
+            <loader/>
+        </instance>
+        <collection id="ref_stat_form_idsDc" class="com.company.statload.entity.StatForm" view="_local">
+            <loader id="ref_stat_form_idsLc">
+                <query>
+                    <![CDATA[select e from statload_StatForm e]]>
+                </query>
+            </loader>
+        </collection>
+    </data>
+    <dialogMode height="AUTO"
+                width="AUTO"
+                modal="true"
+                forceDialog="true"/>
+    <layout expand="editActions" spacing="true">
+        <form id="form" dataContainer="reportDc">
+            <column width="250px">
+                <textField id="name_ShortField" property="name_Short"/>
+                <textArea id="nameLongField" property="nameLong" rows="5"/>
+                <lookupField id="vidField" property="vid"/>
+                <lookupPickerField id="ref_stat_form_idField" optionsContainer="ref_stat_form_idsDc"
+                                   property="ref_stat_form_id" captionProperty="short_name"/>
+                <lookupField id="stat_schemaField" property="stat_schema"/>
+            </column>
+        </form>
+        <hbox id="editActions" spacing="true">
+            <button action="windowCommitAndClose"/>
+            <button action="windowClose"/>
+        </hbox>
+    </layout>
+</window>

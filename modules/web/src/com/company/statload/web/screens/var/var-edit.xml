@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<window xmlns="http://schemas.haulmont.com/cuba/screen/window.xsd"
+        xmlns:c="http://schemas.haulmont.com/cuba/screen/jpql_condition.xsd"
+
+        caption="msg://editorCaption"
+        focusComponent="form"
+        messagesPack="com.company.statload.web.screens.var">
+    <data>
+        <instance id="varDc"
+                  class="com.company.statload.entity.Var"
+                  view="var-view-browse">
+            <loader/>
+        </instance>
+        <collection id="ref_reportsDc" class="com.company.statload.entity.Report" view="report-view-browse">
+            <loader id="ref_reportsLc">
+                <query>
+                    <![CDATA[select e from statload_Report e]]>
+                </query>
+            </loader>
+        </collection>
+        <collection id="ref_pokazesDc" class="com.company.statload.entity.StatPokaz" view="_local">
+            <loader id="ref_pokazesLc">
+                <query>
+                    <![CDATA[select e from statload_StatPokaz e]]>
+                    <condition>
+                             <c:jpql>
+                                <c:where>e.id_form = :id</c:where>
+                            </c:jpql>
+                    </condition>
+                </query>
+            </loader>
+        </collection>
+        <collection id="ref_spravsDc" class="com.company.statload.entity.StatSprav" view="_local">
+            <loader id="ref_spravsLc">
+                <query>
+                    <![CDATA[select e from statload_StatSprav e]]>
+                </query>
+            </loader>
+        </collection>
+    </data>
+    <dialogMode height="AUTO"
+                width="AUTO"
+                modal="true"
+                forceDialog="true"/>
+    <layout expand="editActions" spacing="true">
+        <form id="form" dataContainer="varDc">
+            <column width="250px">
+                <lookupPickerField id="ref_reportField" optionsContainer="ref_reportsDc" property="ref_report"
+                                   captionProperty="name_Short"/>
+                <textField id="codeField" property="code"/>
+                <textField id="nrowField" property="nrow"/>
+                <textField id="ncolField" property="ncol"/>
+                <lookupPickerField id="ref_pokazField" optionsContainer="ref_pokazesDc" property="ref_pokaz"
+                                   captionProperty="fname"/>
+                <lookupPickerField id="ref_spravField" optionsContainer="ref_spravsDc" property="ref_sprav"
+                                   captionProperty="nameTable"/>
+                <textField id="stat_key_fieldField" property="stat_key_field"/>
+                <textField id="stat_res_fieldField" property="stat_res_field"/>
+                <textField id="posfixField" property="posfix"/>
+            </column>
+        </form>
+        <hbox id="editActions" spacing="true">
+            <button id="ComandCloseBtn" action="windowCommitAndClose"/>
+            <button action="windowClose"/>
+        </hbox>
+    </layout>
+</window>

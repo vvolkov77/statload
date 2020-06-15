@@ -1,0 +1,1 @@
+create unique index IDX_STATLOAD_STAT_FORM_UK_ID_FORM on STATLOAD_STAT_FORM (ID_FORM) where DELETE_TS is null ;

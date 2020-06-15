@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<window xmlns="http://schemas.haulmont.com/cuba/screen/window.xsd"
+        xmlns:c="http://schemas.haulmont.com/cuba/screen/jpql_condition.xsd"
+        caption="msg://dialogDepCaption"
+        focusComponent="departmentsTable"
+        messagesPack="com.company.statload.web.screens.Department">
+    <data readOnly="true">
+        <collection id="departmentsDc"
+                    class="com.company.statload.entity.Department"
+                    view="_local">
+            <loader id="departmentsDl">
+                <query>
+                    <![CDATA[select e from statload_Department e]]>
+                </query>
+            </loader>
+        </collection>
+    </data>
+    <dialogMode height="600"
+                width="800"/>
+    <layout expand="departmentsTable"
+            spacing="true">
+        <filter id="filter"
+                applyTo="departmentsTable"
+                dataLoader="departmentsDl">
+            <properties include=".*"/>
+        </filter>
+        
+<groupTable id="departmentsTable"
+        width="100%"
+        dataContainer="departmentsDc">
+    <actions>
+        <action id="remove" type="remove"/>
+    
+        <action id="add" type="add"/>
+    
+    </actions>
+    <columns>
+        <column  id="name"/>
+    
+        <column  id="stat_bank_id"/>
+    
+        <column  id="region"/>
+    
+        <column  id="mfo"/>
+    
+    </columns>
+    <rowsCount/>
+    <buttonsPanel id="buttonsPanel"
+                  alwaysVisible="true">
+        
+            <button id="removeBtn" action="departmentsTable.remove"/>                
+        
+            <button id="addBtn" action="departmentsTable.add"/>                
+        
+    </buttonsPanel>
+</groupTable>
+        <hbox id="lookupActions" spacing="true" visible="false">
+            <button action="lookupSelectAction"/>
+            <button action="lookupCancelAction"/>
+        </hbox>
+    </layout>                
+</window>

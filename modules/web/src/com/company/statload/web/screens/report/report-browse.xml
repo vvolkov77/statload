@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<window xmlns="http://schemas.haulmont.com/cuba/screen/window.xsd"
+        xmlns:c="http://schemas.haulmont.com/cuba/screen/jpql_condition.xsd"
+        caption="msg://browseCaption1"
+        focusComponent="reportsTable"
+        messagesPack="com.company.statload.web.screens.report">
+    <data readOnly="true">
+        <collection id="reportsDc"
+                    class="com.company.statload.entity.Report"
+                    view="report-view-browse">
+            <loader id="reportsDl">
+                <query>
+                    <![CDATA[select e from statload_Report e]]>
+                </query>
+            </loader>
+        </collection>
+    </data>
+    <dialogMode height="600"
+                width="800"/>
+    <facets>
+        <inputDialog id="inputDialogFacet"
+                     caption="msg://exptostatCaption"
+                     onAction="loadreport">
+            <parameters>
+                <dateParameter id="dateParam"
+                               caption="msg://exptostatdateParam"
+                               required="true"/>
+                <entityParameter id="depParam" caption="msg://exptostatDepParam" entityClass="com.company.statload.entity.Department"
+                                 required="true"
+                                 />
+                <booleanParameter id="zoParam"
+                                  caption="msg://exptostatzoParam"
+                                  defaultValue="false"
+                />
+
+            </parameters>
+
+        </inputDialog>
+
+        <inputDialog id="inputDialogCopyStat"
+                     caption="msg://exptostatCaption2"
+                     onAction="copystat">
+            <parameters>
+                <dateParameter id="dateParam1"
+                               caption="msg://exptostatdateParam1"
+                               required="true"/>
+                <dateParameter id="dateParam2"
+                               caption="msg://exptostatdateParam2"
+                               required="true"/>
+
+            </parameters>
+
+        </inputDialog>
+
+    </facets>
+    <layout expand="reportsTable"
+            spacing="true">
+        <filter id="filter"
+                applyTo="reportsTable"
+                dataLoader="reportsDl">
+            <properties include=".*"/>
+        </filter>
+        <groupTable id="reportsTable"
+                    width="100%"
+                    dataContainer="reportsDc">
+            <actions>
+                <action id="create" type="create"/>
+                <action id="edit" type="edit"/>
+                <action id="remove" type="remove"/>
+                <action id="refresh" type="refresh"/>
+                <action id="loadvar" caption="msg://loadvarbtn.caption"/>
+                <action id="loadreport" caption="msg://loadreportbtn.caption"/>
+                <action id="loadmaping" caption="msg://mappingbtn.caption"/>
+                <action id="copystat" caption="msg://copystataction.Caption"/>
+                <action id="loadmapidstat" caption="msg://loadmapidstatact.Caption"/>
+            </actions>
+            <columns>
+                <column id="name_Short"/>
+                <column id="nameLong"/>
+                <column id="vid"/>
+                <column id="ref_stat_form_id.short_name"/>
+                <column id="stat_schema"/>
+            </columns>
+            <rowsCount/>
+            <buttonsPanel id="buttonsPanel"
+                          alwaysVisible="true">
+                <button id="createBtn" action="reportsTable.create"/>
+                <button id="editBtn" action="reportsTable.edit"/>
+                <button id="removeBtn" action="reportsTable.remove"/>
+                <button id="refreshBtn" action="reportsTable.refresh"/>
+                <button id="reportsTableLoadvarBtn" action="reportsTable.loadvar"/>
+                <button id="reportsTableLoadreportBtn" action="reportsTable.loadreport"/>
+                <button id="reportsTableLoadmapingBtn" action="reportsTable.loadmaping"/>
+                <button id="reportsTableCopystatBtn" action="reportsTable.copystat"/>
+                <button id="reportsTableLoadmapidstatBtn" action="reportsTable.loadmapidstat"/>
+            </buttonsPanel>
+        </groupTable>
+        <hbox id="lookupActions" spacing="true" visible="false">
+            <button action="lookupSelectAction"/>
+            <button action="lookupCancelAction"/>
+        </hbox>
+    </layout>
+</window>

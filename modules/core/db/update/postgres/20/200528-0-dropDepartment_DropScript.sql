@@ -1,0 +1,1 @@
+drop table if exists STATLOAD_DEPARTMENT__U71313 cascade ;

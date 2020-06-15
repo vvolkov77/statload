@@ -1,0 +1,1 @@
+create unique index IDX_STATLOAD_STAT_SPRAV_UK_ID_TABLE on STATLOAD_STAT_SPRAV (ID_TABLE) where DELETE_TS is null ;

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<persistence xmlns="http://java.sun.com/xml/ns/persistence" version="2.0">
+    <persistence-unit name="statload" transaction-type="RESOURCE_LOCAL">
+
+        <class>com.company.statload.entity.StatForm</class>
+        <class>com.company.statload.entity.Report</class>
+        <class>com.company.statload.entity.StatPokaz</class>
+        <class>com.company.statload.entity.Var</class>
+        <class>com.company.statload.entity.StatSprav</class>
+        <class>com.company.statload.entity.StatBankHistory</class>
+        <class>com.company.statload.entity.Department</class>
+    </persistence-unit>
+</persistence>

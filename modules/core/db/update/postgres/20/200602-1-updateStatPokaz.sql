@@ -1,0 +1,1 @@
+drop index IDX_STATLOAD_STAT_POKAZ_UK_CODE ;

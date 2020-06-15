@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:context="http://www.springframework.org/schema/context">
+
+    <!-- Annotation-based beans -->
+    <context:component-scan base-package="com.company.statload"/>
+    <bean id="cubaDataSource_dbstat" class="com.haulmont.cuba.core.sys.CubaDataSourceFactoryBean">
+        <property name="storeName" value="dbstat"/>
+    </bean>
+    <bean id="entityManagerFactory_dbstat" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean"
+          lazy-init="false">
+        <property name="persistenceXmlLocation" value="file:${cuba.dataDir}/dbstat-persistence.xml"/>
+        <property name="dataSource" ref="cubaDataSource_dbstat"/>
+        <property name="jpaVendorAdapter" ref="jpaVendorAdapter"/>
+    </bean>
+    <bean id="transactionManager_dbstat" class="org.springframework.orm.jpa.JpaTransactionManager">
+        <property name="entityManagerFactory" ref="entityManagerFactory_dbstat"/>
+        <property name="dataSource" ref="cubaDataSource_dbstat"/>
+        <qualifier type="org.springframework.beans.factory.annotation.Qualifier" value="dbstat"/>
+    </bean>
+
+</beans>

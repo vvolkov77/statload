@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<window xmlns="http://schemas.haulmont.com/cuba/screen/window.xsd"
+        xmlns:c="http://schemas.haulmont.com/cuba/screen/jpql_condition.xsd"
+        caption="msg://browseCaption"
+        focusComponent="varsTable"
+        messagesPack="com.company.statload.web.screens.var">
+    <data readOnly="true">
+        <collection id="varsDc"
+                    class="com.company.statload.entity.Var"
+                    view="var-view-browse">
+            <loader id="varsDl">
+                <query>
+                    <![CDATA[select e from statload_Var e]]>
+                </query>
+            </loader>
+        </collection>
+    </data>
+    <dialogMode height="600"
+                width="800"/>
+    <layout expand="varsTable"
+            spacing="true">
+        <filter id="filter"
+                applyTo="varsTable"
+                dataLoader="varsDl">
+            <properties include=".*"/>
+        </filter>
+        <groupTable id="varsTable"
+                    width="100%"
+                    dataContainer="varsDc">
+            <actions>
+                <action id="create" type="create"/>
+                <action id="edit" type="edit"/>
+                <action id="remove" type="remove"/>
+                <action id="refresh" type="refresh"/>
+                <action id="Sync" caption="msg://SyncBtn.Caption" enable="false"/>
+                <action id="FullSync" caption="msg://fullsyncact.Caption"/>
+            </actions>
+            <columns>
+                <column id="ref_report.name_Short"/>
+                <column id="code"/>
+                <column id="nrow"/>
+                <column id="ncol"/>
+                <column id="ref_pokaz.code"/>
+                <column id="ref_sprav.nameTable"/>
+                <column id="stat_key_field"/>
+                <column id="stat_res_field"/>
+                <column id="posfix"/>
+            </columns>
+            <rowsCount/>
+            <buttonsPanel id="buttonsPanel"
+                          alwaysVisible="true">
+                <button id="createBtn" action="varsTable.create"/>
+                <button id="editBtn" action="varsTable.edit"/>
+                <button id="removeBtn" action="varsTable.remove"/>
+                <button id="refreshBtn" action="varsTable.refresh"/>
+                <button id="varsTableSyncBtn" action="varsTable.Sync"/>
+                <button id="varsTableFullSyncBtn" action="varsTable.FullSync"/>
+            </buttonsPanel>
+        </groupTable>
+        <hbox id="lookupActions" spacing="true" visible="false">
+            <button action="lookupSelectAction"/>
+            <button action="lookupCancelAction"/>
+        </hbox>
+    </layout>
+</window>
