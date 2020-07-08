@@ -8,7 +8,8 @@ import javax.annotation.Nullable;
 public enum VidReportEnum implements EnumClass<Integer> {
 
     VARLEN(1),
-    MATRIX(2);
+    MATRIX(2),
+    BALANCE(3);
 
     private Integer id;
 

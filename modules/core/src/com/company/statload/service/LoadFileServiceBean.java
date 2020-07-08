@@ -378,7 +378,7 @@ public class LoadFileServiceBean implements LoadFileService {
                         "(select dis.sqn_det_dis.nextval,id_region,#drep2 d_report,id_form,id_pokaz,id_pokaz,line, \n" +
                         "to_number(to_char(#drep2,'mm'))||substr(to_char(#drep2,'yyyy'),2,3),zo,id_filial \n" +
                         "from dis.det_dis where d_report=#drep1 and id_form=#id_form and id_filial in (select min(id_filial) from dis.det_dis where d_report=#drep1 and id_form=#id_form)\n" +
-                        " and line='1')")
+                        " and (line='1' or line is null))")
                         .setParameter("drep1", fromdate)
                         .setParameter("drep2", todate)
                         .setParameter("id_form", rep.getRef_stat_form_id().getId_form())
@@ -391,7 +391,7 @@ public class LoadFileServiceBean implements LoadFileService {
                         .executeUpdate();
                 entityManager.createNativeQuery("insert into stat.detail(ID,ID_FORM,ID_POKAZ,D_REPORT,ZNAC,LINE,PR_PERIOD,ZO)\n" +
                         "(select stat.sqn_detail.nextval ID,ID_FORM,ID_POKAZ,#drep2 D_REPORT,id_pokaz ZNAC,LINE,to_number(to_char(#drep2,'mm'))||substr(to_char(#drep2,'yyyy'),2,3) PR_PERIOD,ZO\n" +
-                        " from stat.detail where d_report=#drep1 and id_form=#id_form and line='1')")
+                        " from stat.detail where d_report=#drep1 and id_form=#id_form and (line='1' or line is null))")
                         .setParameter("drep1", fromdate)
                         .setParameter("drep2", todate)
                         .setParameter("id_form", rep.getRef_stat_form_id().getId_form())
@@ -405,6 +405,203 @@ public class LoadFileServiceBean implements LoadFileService {
 
         }
 
+    }
+    @Override
+    public void expbalstat(Date dateParam, Integer depParam, String region, String zoParam, Report rep, FileDescriptor fileDescriptor) {
+       log.debug("Начало expbalstat");
+        try (Transaction tx = persistence.getTransaction("dbstat")) {
+
+            EntityManager entityManager = persistence.getEntityManager("dbstat");
+
+            Transaction tx2 = persistence.getTransaction();
+
+            Workbook workbook = null;
+            Query query = null;
+            int max_row = -1;
+            int key_col = 1;
+
+            // 1. Удаляем старые данные
+            entityManager.createNativeQuery("delete from stat.Rep_File where D_REPORT = #drep and ID_FORM = #id_form and ZO = #zo")
+                    .setParameter("drep", dateParam)
+                    .setParameter("id_form", rep.getRef_stat_form_id().getId_form())
+                    .setParameter("zo", zoParam)
+                    .executeUpdate();
+
+            if (rep.getStat_schema().getId().equals("DIS")) {
+                entityManager.createNativeQuery("delete from DIS.DET_DIS where D_REPORT = #drep and ID_FORM = #id_form and ZO = #zo and id_filial=#dep")
+                        .setParameter("drep", dateParam)
+                        .setParameter("id_form", rep.getRef_stat_form_id().getId_form())
+                        .setParameter("zo", zoParam)
+                        .setParameter("dep", depParam)
+                        .executeUpdate();
+            } else if (rep.getStat_schema().getId().equals("STAT")) {
+                entityManager.createNativeQuery("delete from STAT.DETAIL where D_REPORT = #drep and ID_FORM = #id_form and ZO = #zo")
+                        .setParameter("drep", dateParam)
+                        .setParameter("id_form", rep.getRef_stat_form_id().getId_form())
+                        .setParameter("zo", zoParam)
+                        .executeUpdate();
+            }
+            // 2. Создаем запись об отчете с присвоение идентификатора отчета
+            query = entityManager.createNativeQuery("select stat.sqn_rep_file.nextval from dual");
+            query.executeUpdate();
+            BigDecimal i = (BigDecimal) query.getFirstResult();
+
+            entityManager.createNativeQuery(
+                    "insert into stat.Rep_File(id,d_Report,status,zo,id_form,d_create) values(?,?,?,?,?,sysdate)")
+                    .setParameter(1, i)
+                    .setParameter(2, dateParam)
+                    .setParameter(3, "1")
+                    .setParameter(4, zoParam)
+                    .setParameter(5, rep.getRef_stat_form_id().getId_form())
+                    .executeUpdate();
+            // 3. Находим номер строки и столбца начала отчета баланс
+            /*List l = persistence.getEntityManager().createNativeQuery("select e.id_report,e.nrow,\n" +
+                    "                        e.ncol, s.id_pokaz,f.id_table,f.name_table,e.stat_key_field,e.stat_res_field,e.posfix from public.statload_var e \n" +
+                    "                     left join public.statload_stat_pokaz s on (s.id = e.id_statpokaz) \n" +
+                    "                     left join public.statload_stat_sprav f on (f.id = e.id_sprav)\n" +
+                    "                    where e.delete_ts is null and id_report=?rep order by 2,3"
+            )
+                    .setParameter("rep", rep.getId())
+                    .getResultList();
+
+            tx2.commit();*/
+            // Если нет параметров, то принимаем за начало отчета первую строку и первый столбец файла
+            int scol = 1; // Столбец начала отчета
+            int ecol = 2; // Столбец окончания отчета
+            int srow = 1; // Строка начала отчета
+            // 4. Находим признак окончания отчета
+            workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
+            Sheet firstSheet = workbook.getSheetAt(0);
+
+            for (Row row : firstSheet) {
+
+                for (Cell cell : row) {
+                    if ((cell.getColumnIndex() + 1) == key_col && getCellText(cell).equals("<<END>>")) {
+                        max_row = cell.getRowIndex() + 1;
+                        break;
+                    }
+
+                }
+                if (max_row != -1) break;
+            }
+            if (max_row==-1) throw new java.lang.Error("Не найден признак окончания данных <<END>>");
+            // Расчет признака периода
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(dateParam);
+            String pr_period = (cal.get(Calendar.MONTH)+1)+ String.valueOf(cal.get(Calendar.YEAR)).substring(1,4);
+            // 5. Обрабатываем файл
+            String Val;
+            StatPokaz pokaz=null;
+            BigDecimal NValCell;
+
+            for (Row row : firstSheet) {
+
+                for (Cell cell : row) {
+
+                    if ((cell.getRowIndex() + 1) >= srow) {
+                        if ((cell.getColumnIndex() + 1) == scol) {
+                            Val = getCellText(cell);
+                            // Определяем по значению идентификатор
+                            try {
+                                pokaz = dataManager
+                                        .load(StatPokaz.class)
+                                        .view("_local")
+                                        .query("e.code = :code and e.id_form=:form")
+
+                                        .parameter("code", Val)
+                                        .parameter("form", rep.getRef_stat_form_id().getId_form())
+                                        .one();
+                            } catch(Exception e){
+                                throw new java.lang.Error("Не найден показатель отчета Статистики с кодом "+Val);
+                            }
+
+                        }
+                        if ((cell.getColumnIndex() + 1) == ecol) {
+                            Val = getCellText(cell);
+                            // Проверяем на число
+                            try {
+                               NValCell = new BigDecimal(Val);
+                            } catch (Exception e) {
+                                throw new java.lang.Error("Значение "+Val+" не является числом");
+                            }
+                            // Записываем значения в отчет
+                            if (rep.getStat_schema().getId().equals("DIS")) { // Схема DIS
+
+                                query = entityManager.createNativeQuery("select dis.sqn_DET_DIS.nextval from dual");
+                                query.executeUpdate();
+                                BigDecimal ii = (BigDecimal) query.getFirstResult();
+                                try {
+                                    entityManager.createNativeQuery(
+
+                                            "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,znac,line,pr_period) \n" +
+                                                    "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?znac,?line,?pr_period)")
+                                            .setParameter("id", ii)
+                                            .setParameter("id_region", region)
+                                            .setParameter("d_report", dateParam)
+                                            .setParameter("id_pokaz", pokaz.getId_pokaz())
+                                            .setParameter("zo", zoParam)
+                                            .setParameter("id_filial", depParam)
+                                            .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+                                            .setParameter("znac", NValCell)
+                                            .setParameter("line", cell.getRowIndex() + 1 - srow)
+                                            .setParameter("pr_period", pr_period)
+                                            .executeUpdate();
+                                } catch (Exception e) {
+
+                                    throw new java.lang.Error("Ошибка при вставке строки показателя DIS.DET_DIS id=" + ii + " id_region=" + region + ", d_report=" + dateParam + "\n " +
+                                            " id_pokaz=" + pokaz.getId_pokaz() + " zo=" + zoParam + " id_filial=" + depParam +
+                                            " id_form=" + rep.getRef_stat_form_id().getId_form().longValue() + " id_form=" + pokaz.getId_pokaz() +
+                                            " znac=" + NValCell + " line=" + (cell.getRowIndex() + 1 - srow) + " pr_period " + pr_period + "\n" +
+                                            " ERR: " + e.getMessage());
+
+
+                                }
+                            }
+                            else {
+                                query = entityManager.createNativeQuery("select stat.sqn_detail.nextval from dual");
+                                query.executeUpdate();
+                                BigDecimal yy = (BigDecimal) query.getFirstResult();
+                                try {
+                                    entityManager.createNativeQuery(
+                                            "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?line,?pr_period,?zo)")
+                                            .setParameter("id",yy)
+                                            .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
+                                            .setParameter("id_pokaz",pokaz.getId_pokaz())
+                                            .setParameter("d_report",dateParam)
+                                            .setParameter("znac",NValCell)
+                                            .setParameter("line",cell.getRowIndex() + 2 - srow)
+                                            .setParameter("pr_period",pr_period)
+                                            .setParameter("zo",zoParam)
+                                            .executeUpdate();
+                                } catch (Exception e) {
+
+                                    throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL id=" + yy + ", d_report=" + dateParam + "\n " +
+                                            " id_pokaz=" + pokaz.getId_pokaz() + " zo=" + zoParam +
+                                            " id_form=" + rep.getRef_stat_form_id().getId_form().longValue() + " id_pokaz=" + pokaz.getId_pokaz() +
+                                            " znac=" + NValCell + " line=" + (cell.getRowIndex() + 2 - srow) + " pr_period " + pr_period + "\n" +
+                                            " ERR: " + e.getMessage());
+
+                                }
+
+
+                            }
+
+                        }
+
+                    }
+                    else break;
+
+                }
+                log.info("row.getRowNum() "+row.getRowNum()+" max_row "+max_row);
+                if ((row.getRowNum()+1)==max_row-1) break;
+            }
+            // фиксируем транзакцию
+            tx.commit();
+        } catch (FileStorageException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
     @Override
     public void expstat(Date dateParam, Integer depParam, String region, String zoParam, Report rep, FileDescriptor fileDescriptor) {
@@ -502,7 +699,7 @@ public class LoadFileServiceBean implements LoadFileService {
 
 
             // Определяем максимальную строку для отчета переменной длинны
-            if (rep.getVid().getId()==1) {
+            if (rep.getVid().getId()==1||rep.getVid().getId()==3) {
                 for (Row row : firstSheet) {
 
                     for (Cell cell : row) {
@@ -515,7 +712,7 @@ public class LoadFileServiceBean implements LoadFileService {
                     if (max_row != -1) break;
                 }
             }
-            if (max_row==-1&&rep.getVid().getId()==1) throw new java.lang.Error("Не найден признак окончания данных <<END>>");
+            if (max_row==-1&&(rep.getVid().getId()==1||rep.getVid().getId()==3)) throw new java.lang.Error("Не найден признак окончания данных <<END>>");
             log.debug("Максимальная строка max_row="+max_row);
             //----------------------------------------------------------------------
 
@@ -533,8 +730,10 @@ public class LoadFileServiceBean implements LoadFileService {
           //  Cell cell = null;
            // Iterator<Cell> itcell = null;
            // Iterator<Row> itrow =null;
-
-                rep_row = 1;
+               if (rep.getVid().getId() == 2&&rep.getStat_schema().getId().equals("STAT")) // Если отчет матричный и схема STAT, то номер строки пустой
+                 rep_row = -1;
+               else
+                 rep_row = 1;
                 p_row = 0;
 
                 // Переводим цикл по показателям в начало
@@ -656,11 +855,6 @@ public class LoadFileServiceBean implements LoadFileService {
                                             try {
                                                 entityManager.createNativeQuery(
 
-                                                        /*"insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,znac,line,pr_period) \n" +
-                                                                "values(" + ii + ",'" + region + "',to_date('" + dateParam + "','yyyy-mm-dd')," + id_pokaz + ",'" + zoParam + "'," + depParam + ",\n" +
-                                                                rep.getRef_stat_form_id().getId_form().longValue() + "," + NValCell.toString() + "," + rep_row + "," + pr_period + ")")
-
-                                                         */
                                                         "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,znac,line,pr_period) \n"+
                                                                 "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?znac,?line,?pr_period)")
                                                 .setParameter("id", ii)
@@ -685,9 +879,6 @@ public class LoadFileServiceBean implements LoadFileService {
 
                                             try {
                                                 entityManager.createNativeQuery(
-                                                        /*"insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,line,pr_period) \n" +
-                                                                "values(" + ii + ",'" + region + "',to_date('" + dateParam + "','yyyy-mm-dd')," + id_pokaz + ",'" + zoParam + "'," + depParam + ",\n" +
-                                                                rep.getRef_stat_form_id().getId_form().longValue() + "," + rep_row + "," + pr_period + ")")*/
                                                         "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,line,pr_period) \n"+
                                                                 "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?line,?pr_period)")
                                                         .setParameter("id", ii)
@@ -744,21 +935,29 @@ public class LoadFileServiceBean implements LoadFileService {
 
                                         if (isnum && id_sprav == -1) { //Если число и нет указания на справочник, то записывать в DETAIL
                                             try {
+                                                if (rep_row==-1)
                                                 entityManager.createNativeQuery(
-                                                        /*"insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,line,pr_period,zo) values(" + yy + "," + rep.getRef_stat_form_id().getId_form().longValue() +
-                                                                "," + id_pokaz + ",to_date('" + dateParam + "','yyyy-mm-dd')," + NValCell + "," + rep_row + "," + pr_period + ",'" + zoParam + "')")
-
-                                                         */
-                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?line,?pr_period,?zo)")
+                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?pr_period,?zo)")
                                                         .setParameter("id",yy)
                                                         .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
                                                         .setParameter("id_pokaz",id_pokaz)
                                                         .setParameter("d_report",dateParam)
                                                         .setParameter("znac",NValCell)
-                                                        .setParameter("line",rep_row)
                                                         .setParameter("pr_period",pr_period)
                                                         .setParameter("zo",zoParam)
                                                         .executeUpdate();
+                                                else
+                                                    entityManager.createNativeQuery(
+                                                            "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?line,?pr_period,?zo)")
+                                                            .setParameter("id",yy)
+                                                            .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
+                                                            .setParameter("id_pokaz",id_pokaz)
+                                                            .setParameter("d_report",dateParam)
+                                                            .setParameter("znac",NValCell)
+                                                            .setParameter("line",rep_row)
+                                                            .setParameter("pr_period",pr_period)
+                                                            .setParameter("zo",zoParam)
+                                                            .executeUpdate();
                                             } catch (Exception e) {
 
                                                 throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + "ERR: " + e.getMessage());
@@ -767,21 +966,29 @@ public class LoadFileServiceBean implements LoadFileService {
 
                                         } else {
                                             try {
+                                                if (rep_row==-1)
                                                 entityManager.createNativeQuery(
-                                                        /*"insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,line,pr_period,zo) values(" + yy + "," + rep.getRef_stat_form_id().getId_form().longValue() +
-                                                                "," + id_pokaz + ",to_date('" + dateParam + "','yyyy-mm-dd')," + rep_row + "," + pr_period + ",'" + zoParam + "')"
-
-                                                         */
-                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?line,?pr_period,?zo)")
+                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?pr_period,?zo)")
                                                         .setParameter("id",yy)
                                                         .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
                                                         .setParameter("id_pokaz",id_pokaz)
                                                         .setParameter("d_report",dateParam)
 
-                                                        .setParameter("line",rep_row)
                                                         .setParameter("pr_period",pr_period)
                                                         .setParameter("zo",zoParam)
                                                         .executeUpdate();
+                                                else
+                                                    entityManager.createNativeQuery(
+                                                            "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?line,?pr_period,?zo)")
+                                                            .setParameter("id",yy)
+                                                            .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
+                                                            .setParameter("id_pokaz",id_pokaz)
+                                                            .setParameter("d_report",dateParam)
+
+                                                            .setParameter("line",rep_row)
+                                                            .setParameter("pr_period",pr_period)
+                                                            .setParameter("zo",zoParam)
+                                                            .executeUpdate();
                                             } catch (Exception e) {
 
                                                 throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + "ERR: " + e.getMessage());

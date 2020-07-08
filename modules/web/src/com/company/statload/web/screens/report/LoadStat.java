@@ -65,8 +65,11 @@ public class LoadStat extends StandardLookup<Report> {
                             String depcode = fd.getName().replace(".xls", "");
                             if (dateParam.isEmpty()) throw new java.lang.Error("Введите дату отчета");
                             try {
-
-                                loadFileSvc.expstat((Date) dateParam.getValue(), loadFileSvc.getDepartmentStatId(depcode), loadFileSvc.getDepartmentRegion(depcode),
+                                if (reportsDc.getItem().getVid().getId()==3)
+                                   loadFileSvc.expbalstat((Date) dateParam.getValue(), loadFileSvc.getDepartmentStatId(depcode), loadFileSvc.getDepartmentRegion(depcode),
+                                        zoParam.isChecked() ? "1" : " ", reportsDc.getItem(), fd);
+                                else
+                                  loadFileSvc.expstat((Date) dateParam.getValue(), loadFileSvc.getDepartmentStatId(depcode), loadFileSvc.getDepartmentRegion(depcode),
                                         zoParam.isChecked() ? "1" : " ", reportsDc.getItem(), fd);
                             } catch(Exception e){
                                 multiUploadField.clearUploads();

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<app-component xmlns="http://schemas.haulmont.com/cuba/app-component.xsd"
+               dependsOn="com.haulmont.cuba">
+
+    <module name="global" blocks="*">
+        <artifact name="app_statload-global" appJar="true"/>
+
+        <property name="cuba.persistenceConfig" value="+com/company/statload/persistence.xml"/>
+        <property name="cuba.metadataConfig" value="+com/company/statload/metadata.xml"/>
+        <property name="cuba.viewsConfig" value="+com/company/statload/views.xml"/>
+        <property name="cuba.persistenceConfig_dbstat" value="com/company/statload/dbstat-persistence.xml"/>
+        <property name="cuba.additionalStores" value="dbstat"/>
+    </module>
+    <module name="core" dependsOn="global" blocks="core">
+        <artifact name="app_statload-core" appJar="true"/>
+        <artifact name="app_statload-core" classifier="db" ext="zip" configuration="dbscripts"/>
+
+        <property name="cuba.springContextConfig" value="+com/company/statload/spring.xml"/>
+        <property name="cuba.mainMessagePack" value="+com.company.statload.core"/>
+    </module>
+    <module name="web" dependsOn="global" blocks="web">
+        <artifact name="app_statload-web" appJar="true"/>
+        <artifact name="app_statload-web" classifier="web" ext="zip" configuration="webcontent"/>
+
+        <property name="cuba.springContextConfig" value="+com/company/statload/web-spring.xml"/>
+        <property name="cuba.dispatcherSpringContextConfig" value="+com/company/statload/web-dispatcher-spring.xml"/>
+        <property name="cuba.windowConfig" value="+com/company/statload/web-screens.xml"/>
+        <property name="cuba.menuConfig" value="+com/company/statload/web-menu.xml"/>
+        <property name="cuba.permissionConfig" value="+com/company/statload/web-permissions.xml"/>
+        <property name="cuba.mainMessagePack" value="+com.company.statload.web"/>
+    </module>
+</app-component>

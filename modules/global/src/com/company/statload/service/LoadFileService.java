@@ -21,6 +21,8 @@ public interface LoadFileService {
 
     void copystat(Date fromdate, Date todate, Report rep);
 
+    void expbalstat(Date dateParam, Integer depParam, String region, String zoParam, Report rep, FileDescriptor fileDescriptor);
+
     void expstat(Date dateParam, Integer depParam, String region, String zoParam, Report rep, FileDescriptor fileDescriptor);
 
     int getDepartmentStatId(String depcode);

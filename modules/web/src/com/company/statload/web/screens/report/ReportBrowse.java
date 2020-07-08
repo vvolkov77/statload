@@ -128,8 +128,10 @@ public class ReportBrowse extends StandardLookup<Report> {
                     String region = dep.getRegion();
 
                 Boolean zo= inputDialogResult.getValue("zoParam");
-
-                 loadFileSvc.expstat(dt,dep_id,region, zo ? "1" : " ", reportsDc.getItem(), fileDescriptor);
+                 if (reportsDc.getItem().getVid().getId()==3)
+                     loadFileSvc.expbalstat(dt,dep_id,region, zo ? "1" : " ", reportsDc.getItem(), fileDescriptor);
+                 else
+                     loadFileSvc.expstat(dt,dep_id,region, zo ? "1" : " ", reportsDc.getItem(), fileDescriptor);
 
             });
             screens.show(dialog);
