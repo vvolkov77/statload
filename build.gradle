@@ -186,6 +186,15 @@ restart.finalizedBy start
 
 task buildWar(type: CubaWarBuilding) {
     includeJdbcDriver = true
-    appProperties = ['cuba.automaticDatabaseUpdate': true]
-    webXmlPath = 'modules/web/web/WEB-INF/single-war-web.xml'
+    appProperties = [
+            'cuba.automaticDatabaseUpdate'        : true,
+            'cuba.webPort'                        : 8082,
+            'cuba.connectionUrlList'              : 'http://localhost:8082/app_statload-core',
+            'cuba.web.productionMode'             : true,
+            'cuba.dataSourceProvider'             : 'jndi'
+    ]
+    appHome = '${app.home}'
+    includeContextXml = true
+    singleWar = false
+    coreContextXmlPath = 'modules/core/web/META-INF/war-context.xml'
 }
