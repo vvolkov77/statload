@@ -458,9 +458,10 @@ public class LoadFileServiceBean implements LoadFileService {
             int scol; // Столбец начала отчета
             int ecol; // Столбец окончания отчета
             int srow; // Строка начала отчета
+            String posfix; // Постфикс показателя
             try {
                 List l =  persistence.getEntityManager().createNativeQuery("select min(e.nrow) mrow,\n" +
-                        "                        max(e.ncol) maxcol,min(e.ncol) mincol from public.statload_var e \n" +
+                        "                        max(e.ncol) maxcol,min(e.ncol) mincol,max(e.posfix) posfix from public.statload_var e \n" +
                         "                    where e.delete_ts is null and id_report=?rep"
                 )
                         .setParameter("rep", rep.getId())
@@ -468,6 +469,10 @@ public class LoadFileServiceBean implements LoadFileService {
                 Iterator it = l.listIterator();
                 if (it.hasNext()) {
                     Object[] qrow = (Object[]) it.next();
+                    if (qrow[3]!=null)
+                        posfix = (String) qrow[3];
+                    else
+                        posfix = "";
                     if (qrow[2]!=null)
                       scol = (int) qrow[2];
                     else
@@ -485,6 +490,7 @@ public class LoadFileServiceBean implements LoadFileService {
                     scol = 1; // Столбец начала отчета
                     ecol = 3; // Столбец окончания отчета
                     srow = 1; // Строка начала отчета
+                    posfix = ""; // Постфикс показателя
                 }
                 tx2.commit();
             } catch (Exception e){
@@ -492,6 +498,7 @@ public class LoadFileServiceBean implements LoadFileService {
                 scol = 1; // Столбец начала отчета
                 ecol = 3; // Столбец окончания отчета
                 srow = 1; // Строка начала отчета
+                posfix = ""; // Постфикс показателя
             }
 
             // 4. Находим признак окончания отчета
@@ -536,11 +543,11 @@ public class LoadFileServiceBean implements LoadFileService {
                                         .view("_local")
                                         .query("e.code = :code and e.id_form=:form")
 
-                                        .parameter("code", Val)
+                                        .parameter("code", Val+posfix)
                                         .parameter("form", rep.getRef_stat_form_id().getId_form())
                                         .one();
                             } catch(Exception e){
-                                throw new java.lang.Error("Не найден показатель отчета Статистики с кодом "+Val);
+                                throw new java.lang.Error("Не найден показатель отчета Статистики с кодом "+Val+posfix);
                             }
 
                         }
