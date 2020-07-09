@@ -1,0 +1,28 @@
+<Context>
+
+    <!-- Database connection -->
+    <Resource
+      name="jdbc/CubaDS"
+      type="javax.sql.DataSource"
+      maxTotal="20"
+      maxIdle="2"
+      maxWaitMillis="5000"
+      driverClassName="org.postgresql.Driver"
+      url="jdbc:postgresql://localhost/statload2"
+      username="postgres"
+      password="postgres"/>
+
+    <!-- Switch off session serialization -->
+    <Manager pathname=""/>
+    <!--Data store 'dbstat' connection-->
+    <Resource driverClassName="oracle.jdbc.OracleDriver"
+              maxIdle="2"
+              maxTotal="20"
+              maxWaitMillis="5000"
+              name="jdbc/dbstat"
+              password="dafs"
+              type="javax.sql.DataSource"
+              url="jdbc:oracle:thin:@//localhost/dbstat6"
+              username="dafs"/>
+
+</Context>
