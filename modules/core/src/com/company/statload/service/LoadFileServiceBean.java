@@ -84,7 +84,7 @@ public class LoadFileServiceBean implements LoadFileService {
     @Override
     public void loadtemplate(Report rep, FileDescriptor fdscr) throws FileStorageException {
 
-        log.debug("Файл импорта "+fdscr.getName());
+        log.debug("Файл импорта шаблона"+fdscr.getName());
 
         Workbook workbook = null;
         if (fileStorageAPI.fileExists(fdscr)) {//
@@ -107,7 +107,7 @@ public class LoadFileServiceBean implements LoadFileService {
                     ValCell=getCellText(cell);
                     log.debug("loadtemplate.Вижу значение ячейки "+ValCell);
                     if ((rep.getVid().getId()==2&&ValCell.indexOf('[')>=0&&ValCell.indexOf(']')>ValCell.indexOf('[')/*==ValCell.length()-1*/)||// Для матричных отчетов показатель ограничивается символами [ ]
-                            (rep.getVid().getId()==1&&ValCell.indexOf('{')>=0&&ValCell.indexOf('}')>ValCell.indexOf('{')/*==ValCell.length()-1*/) // Для отчетов переменной длинны показатель ограничивается символами { }
+                            ((rep.getVid().getId()==1||rep.getVid().getId()==3)&&ValCell.indexOf('{')>=0&&ValCell.indexOf('}')>ValCell.indexOf('{')/*==ValCell.length()-1*/) // Для отчетов переменной длинны показатель ограничивается символами { }
                     ) {
                         // Выделяем название показателя
                         if (rep.getVid().getId()==2)
@@ -455,20 +455,45 @@ public class LoadFileServiceBean implements LoadFileService {
                     .setParameter(5, rep.getRef_stat_form_id().getId_form())
                     .executeUpdate();
             // 3. Находим номер строки и столбца начала отчета баланс
-            /*List l = persistence.getEntityManager().createNativeQuery("select e.id_report,e.nrow,\n" +
-                    "                        e.ncol, s.id_pokaz,f.id_table,f.name_table,e.stat_key_field,e.stat_res_field,e.posfix from public.statload_var e \n" +
-                    "                     left join public.statload_stat_pokaz s on (s.id = e.id_statpokaz) \n" +
-                    "                     left join public.statload_stat_sprav f on (f.id = e.id_sprav)\n" +
-                    "                    where e.delete_ts is null and id_report=?rep order by 2,3"
-            )
-                    .setParameter("rep", rep.getId())
-                    .getResultList();
+            int scol; // Столбец начала отчета
+            int ecol; // Столбец окончания отчета
+            int srow; // Строка начала отчета
+            try {
+                List l =  persistence.getEntityManager().createNativeQuery("select min(e.nrow) mrow,\n" +
+                        "                        max(e.ncol) maxcol,min(e.ncol) mincol from public.statload_var e \n" +
+                        "                    where e.delete_ts is null and id_report=?rep"
+                )
+                        .setParameter("rep", rep.getId())
+                        .getResultList();
+                Iterator it = l.listIterator();
+                if (it.hasNext()) {
+                    Object[] qrow = (Object[]) it.next();
+                    if (qrow[2]!=null)
+                      scol = (int) qrow[2];
+                    else
+                      scol = 1;
+                    if (qrow[1]!=null)
+                      ecol =  (int) qrow[1];
+                    else
+                      ecol = 3;
+                    if (qrow[0]!=null)
+                      srow =  (int) qrow[0];
+                    else
+                      srow =  1;
+                } else
+                {
+                    scol = 1; // Столбец начала отчета
+                    ecol = 3; // Столбец окончания отчета
+                    srow = 1; // Строка начала отчета
+                }
+                tx2.commit();
+            } catch (Exception e){
+                // Если нет параметров, то принимаем за начало отчета первую строку и первый столбец файла
+                scol = 1; // Столбец начала отчета
+                ecol = 3; // Столбец окончания отчета
+                srow = 1; // Строка начала отчета
+            }
 
-            tx2.commit();*/
-            // Если нет параметров, то принимаем за начало отчета первую строку и первый столбец файла
-            int scol = 1; // Столбец начала отчета
-            int ecol = 2; // Столбец окончания отчета
-            int srow = 1; // Строка начала отчета
             // 4. Находим признак окончания отчета
             workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
             Sheet firstSheet = workbook.getSheetAt(0);
@@ -501,6 +526,9 @@ public class LoadFileServiceBean implements LoadFileService {
                     if ((cell.getRowIndex() + 1) >= srow) {
                         if ((cell.getColumnIndex() + 1) == scol) {
                             Val = getCellText(cell);
+                            // Приводим к целочисленному виду
+                            Float floatV = Float.parseFloat(Val);
+                            Val = String.valueOf(floatV.intValue());
                             // Определяем по значению идентификатор
                             try {
                                 pokaz = dataManager
@@ -543,7 +571,7 @@ public class LoadFileServiceBean implements LoadFileService {
                                             .setParameter("id_filial", depParam)
                                             .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
                                             .setParameter("znac", NValCell)
-                                            .setParameter("line", cell.getRowIndex() + 1 - srow)
+                                            .setParameter("line", cell.getRowIndex() + 2 - srow)
                                             .setParameter("pr_period", pr_period)
                                             .executeUpdate();
                                 } catch (Exception e) {
