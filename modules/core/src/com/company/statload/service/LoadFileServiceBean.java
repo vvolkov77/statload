@@ -534,8 +534,13 @@ public class LoadFileServiceBean implements LoadFileService {
                         if ((cell.getColumnIndex() + 1) == scol) {
                             Val = getCellText(cell);
                             // Приводим к целочисленному виду
-                            Float floatV = Float.parseFloat(Val);
-                            Val = String.valueOf(floatV.intValue());
+                            try {
+                                Float floatV = Float.parseFloat(Val);
+                                Val = String.valueOf(floatV.intValue());
+                            }
+                            catch (Exception e){
+                                Val = Val+"";// Сохраняем прочтенное значение
+                            }
                             // Определяем по значению идентификатор
                             try {
                                 pokaz = dataManager
