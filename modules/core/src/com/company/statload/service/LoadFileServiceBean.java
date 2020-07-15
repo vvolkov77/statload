@@ -7,6 +7,7 @@ import com.haulmont.cuba.core.Persistence;
 import com.haulmont.cuba.core.Query;
 import com.haulmont.cuba.core.Transaction;
 import com.haulmont.cuba.core.app.FileStorageAPI;
+import com.haulmont.cuba.core.app.ServerConfig;
 import com.haulmont.cuba.core.entity.FileDescriptor;
 import com.haulmont.cuba.core.global.DataManager;
 import com.haulmont.cuba.core.global.FileStorageException;
@@ -65,8 +66,13 @@ public class LoadFileServiceBean implements LoadFileService {
     @Inject
     private Persistence persistence;
 
-    //удаление файлов с шаблонами отчетов из Storage и записи из системной таблицы sys_file
+
     public void delFile(FileDescriptor fileDescr) throws FileStorageException {
+        /*
+        Удаляет файл из временного хранилища файлов сервера и из таблицы учета этих файлов
+        fileDescr - дескриптор файла во временном хранилище файлов
+         */
+
         EntityManager em;
         try (Transaction tx = persistence.createTransaction()) {
             em = persistence.getEntityManager();
@@ -83,8 +89,6 @@ public class LoadFileServiceBean implements LoadFileService {
 
     @Override
     public void loadtemplate(Report rep, FileDescriptor fdscr) throws FileStorageException {
-
-        log.debug("Файл импорта шаблона"+fdscr.getName());
 
         Workbook workbook = null;
         if (fileStorageAPI.fileExists(fdscr)) {//
@@ -166,7 +170,11 @@ public class LoadFileServiceBean implements LoadFileService {
 
     @Override
     public void loadmaping(Report rep, FileDescriptor fdscr) throws FileStorageException {
-        log.debug("loadmaping Файл импорта "+fdscr.getName());
+        /*
+        Загрузка файла с соответствием кода показателя модуля и кода показателя Статистики
+        rep - отчет, для которого загружается соответствие
+        fdscr - описатель файла во временно хранилище файлов
+         */
 
         Workbook workbook = null;
         if (fileStorageAPI.fileExists(fdscr)) {//
@@ -252,6 +260,11 @@ public class LoadFileServiceBean implements LoadFileService {
                     }
                 }
               tx.commit();
+                try {
+                    delFile(fdscr);
+                } catch (Exception e) {
+                    throw new FileStorageException(FileStorageException.Type.IO_EXCEPTION, "File storage не смог удалить файл " + fdscr.getId());
+                }
             } catch (IOException e) {
                 throw new java.lang.Error(e.getStackTrace().toString());
             }
@@ -261,7 +274,12 @@ public class LoadFileServiceBean implements LoadFileService {
 
     @Override
     public boolean fieldisvalid(String field, String sprav){
-
+/*
+   Проверка наличия поля в справочнике
+   - field название поля в таблице
+   - sprav название таблицы в формате <схема>.<таблица>
+   Нужны права доступа к представлению all_tab_cols
+ */
         try (Transaction tx = persistence.createTransaction("dbstat")) {
 
             EntityManager entityManager = persistence.getEntityManager("dbstat");
@@ -269,10 +287,10 @@ public class LoadFileServiceBean implements LoadFileService {
             //   отделяем название справочника от схемы. если не удается, то выдаем ошибку
             String s = "";
             String tab = "";
+            if (sprav.indexOf(".")==-1) throw new java.lang.Error("Не соответствие названия "+sprav+" формату <схема>.<таблица>");
+            s = sprav.substring(0, sprav.indexOf("."));
+            tab = sprav.substring(sprav.indexOf(".")+1);
 
-                s = sprav.substring(0, 3);
-                tab = sprav.substring(4);
-              //  if (1==1) throw new java.lang.Error(s + "-" + tab);
 
 
             BigDecimal l = (BigDecimal) entityManager.createNativeQuery("select count(*) from all_tab_cols where table_name=?tab and owner=?sch and COLUMN_NAME = ?field"
@@ -336,9 +354,11 @@ public class LoadFileServiceBean implements LoadFileService {
 
     @Override
     public int checkstat(Date pdate, Report rep){
-       // Сервис проверки наличия отчета за дату в статистике
-        // Возвращает количество отчетов
-        log.debug("Начало copystat");
+        /*
+         Проверка наличия отчета за дату в Статистике
+         Возвращает количество отчетов
+         */
+
         try (Transaction tx = persistence.getTransaction("dbstat")) {
             EntityManager entityManager = persistence.getEntityManager("dbstat");
 
@@ -352,6 +372,12 @@ public class LoadFileServiceBean implements LoadFileService {
     }
     @Override
     public void copystat(Date fromdate, Date todate, Report rep){
+        /*
+        Копирует отчет Статистики с одной даты на другую с указанием идентификаторов показателей вместо сумм
+        Предварительно надо в копируемом отчете заполнить все значения. Не должно быть пустых значений
+        fromdate - за какую дату брать исходный отчет
+        todate   - дата записи нового отчета
+         */
         log.debug("Начало copystat");
         try (Transaction tx = persistence.getTransaction("dbstat")) {
 
@@ -408,7 +434,15 @@ public class LoadFileServiceBean implements LoadFileService {
     }
     @Override
     public void expbalstat(Date dateParam, Integer depParam, String region, String zoParam, Report rep, FileDescriptor fileDescriptor) {
-       log.debug("Начало expbalstat");
+       /*
+         Обработка отчета типа "Баланс" и загрузка в БД Статистика
+         - dateParam - дата отчета в БД Статистика
+         - depParam Идентификатор подразделения Саттистики
+         - region Код региона в Статистике
+         - zoParam Признак заключительных оборотов
+         - rep Загружаемый отчет модуля
+         - fileDescriptor Описатель файла во временном хранилище файлов сервера
+        */
         try (Transaction tx = persistence.getTransaction("dbstat")) {
 
             EntityManager entityManager = persistence.getEntityManager("dbstat");
@@ -503,149 +537,164 @@ public class LoadFileServiceBean implements LoadFileService {
 
             // 4. Находим признак окончания отчета
             workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
-            Sheet firstSheet = workbook.getSheetAt(0);
+            try {
+                Sheet firstSheet = workbook.getSheetAt(workbook.getNumberOfSheets() - 1);
 
-            for (Row row : firstSheet) {
+                for (Row row : firstSheet) {
 
-                for (Cell cell : row) {
-                    if ((cell.getColumnIndex() + 1) == key_col && getCellText(cell).equals("<<END>>")) {
-                        max_row = cell.getRowIndex() + 1;
-                        break;
-                    }
-
-                }
-                if (max_row != -1) break;
-            }
-            if (max_row==-1) throw new java.lang.Error("Не найден признак окончания данных <<END>>");
-            // Расчет признака периода
-            Calendar cal = Calendar.getInstance();
-            cal.setTime(dateParam);
-            String pr_period = (cal.get(Calendar.MONTH)+1)+ String.valueOf(cal.get(Calendar.YEAR)).substring(1,4);
-            // 5. Обрабатываем файл
-            String Val;
-            StatPokaz pokaz=null;
-            BigDecimal NValCell;
-
-            for (Row row : firstSheet) {
-
-                for (Cell cell : row) {
-
-                    if ((cell.getRowIndex() + 1) >= srow) {
-                        if ((cell.getColumnIndex() + 1) == scol) {
-                            Val = getCellText(cell);
-                            // Приводим к целочисленному виду
-                            try {
-                                Float floatV = Float.parseFloat(Val);
-                                Val = String.valueOf(floatV.intValue());
-                            }
-                            catch (Exception e){
-                                Val = Val+"";// Сохраняем прочтенное значение
-                            }
-                            // Определяем по значению идентификатор
-                            try {
-                                pokaz = dataManager
-                                        .load(StatPokaz.class)
-                                        .view("_local")
-                                        .query("e.code = :code and e.id_form=:form")
-
-                                        .parameter("code", Val+posfix)
-                                        .parameter("form", rep.getRef_stat_form_id().getId_form())
-                                        .one();
-                            } catch(Exception e){
-                                throw new java.lang.Error("Не найден показатель отчета Статистики с кодом "+Val+posfix);
-                            }
-
-                        }
-                        if ((cell.getColumnIndex() + 1) == ecol) {
-                            Val = getCellText(cell);
-                            // Проверяем на число
-                            try {
-                               NValCell = new BigDecimal(Val);
-                            } catch (Exception e) {
-                                throw new java.lang.Error("Значение "+Val+" не является числом");
-                            }
-                            // Записываем значения в отчет
-                            if (rep.getStat_schema().getId().equals("DIS")) { // Схема DIS
-
-                                query = entityManager.createNativeQuery("select dis.sqn_DET_DIS.nextval from dual");
-                                query.executeUpdate();
-                                BigDecimal ii = (BigDecimal) query.getFirstResult();
-                                try {
-                                    entityManager.createNativeQuery(
-
-                                            "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,znac,line,pr_period) \n" +
-                                                    "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?znac,?line,?pr_period)")
-                                            .setParameter("id", ii)
-                                            .setParameter("id_region", region)
-                                            .setParameter("d_report", dateParam)
-                                            .setParameter("id_pokaz", pokaz.getId_pokaz())
-                                            .setParameter("zo", zoParam)
-                                            .setParameter("id_filial", depParam)
-                                            .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
-                                            .setParameter("znac", NValCell)
-                                            .setParameter("line", cell.getRowIndex() + 2 - srow)
-                                            .setParameter("pr_period", pr_period)
-                                            .executeUpdate();
-                                } catch (Exception e) {
-
-                                    throw new java.lang.Error("Ошибка при вставке строки показателя DIS.DET_DIS id=" + ii + " id_region=" + region + ", d_report=" + dateParam + "\n " +
-                                            " id_pokaz=" + pokaz.getId_pokaz() + " zo=" + zoParam + " id_filial=" + depParam +
-                                            " id_form=" + rep.getRef_stat_form_id().getId_form().longValue() + " id_form=" + pokaz.getId_pokaz() +
-                                            " znac=" + NValCell + " line=" + (cell.getRowIndex() + 1 - srow) + " pr_period " + pr_period + "\n" +
-                                            " ERR: " + e.getMessage());
-
-
-                                }
-                            }
-                            else {
-                                query = entityManager.createNativeQuery("select stat.sqn_detail.nextval from dual");
-                                query.executeUpdate();
-                                BigDecimal yy = (BigDecimal) query.getFirstResult();
-                                try {
-                                    entityManager.createNativeQuery(
-                                            "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?line,?pr_period,?zo)")
-                                            .setParameter("id",yy)
-                                            .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
-                                            .setParameter("id_pokaz",pokaz.getId_pokaz())
-                                            .setParameter("d_report",dateParam)
-                                            .setParameter("znac",NValCell)
-                                            .setParameter("line",cell.getRowIndex() + 2 - srow)
-                                            .setParameter("pr_period",pr_period)
-                                            .setParameter("zo",zoParam)
-                                            .executeUpdate();
-                                } catch (Exception e) {
-
-                                    throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL id=" + yy + ", d_report=" + dateParam + "\n " +
-                                            " id_pokaz=" + pokaz.getId_pokaz() + " zo=" + zoParam +
-                                            " id_form=" + rep.getRef_stat_form_id().getId_form().longValue() + " id_pokaz=" + pokaz.getId_pokaz() +
-                                            " znac=" + NValCell + " line=" + (cell.getRowIndex() + 2 - srow) + " pr_period " + pr_period + "\n" +
-                                            " ERR: " + e.getMessage());
-
-                                }
-
-
-                            }
-
+                    for (Cell cell : row) {
+                        if ((cell.getColumnIndex() + 1) == key_col && getCellText(cell).equals("<<END>>")) {
+                            max_row = cell.getRowIndex() + 1;
+                            break;
                         }
 
                     }
-                    else break;
-
+                    if (max_row != -1) break;
                 }
-                log.info("row.getRowNum() "+row.getRowNum()+" max_row "+max_row);
-                if ((row.getRowNum()+1)==max_row-1) break;
+                if (max_row == -1) throw new java.lang.Error("Не найден признак окончания данных <<END>>");
+                // Расчет признака периода
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(dateParam);
+                String pr_period = (cal.get(Calendar.MONTH) + 1) + String.valueOf(cal.get(Calendar.YEAR)).substring(1, 4);
+                // 5. Обрабатываем файл
+                String Val;
+                StatPokaz pokaz = null;
+                BigDecimal NValCell;
+
+                for (Row row : firstSheet) {
+
+                    for (Cell cell : row) {
+
+                        if ((cell.getRowIndex() + 1) >= srow) {
+                            if ((cell.getColumnIndex() + 1) == scol) {
+                                Val = getCellText(cell);
+                                // Приводим к целочисленному виду
+                                try {
+                                    Float floatV = Float.parseFloat(Val);
+                                    Val = String.valueOf(floatV.intValue());
+                                } catch (Exception e) {
+                                    Val = Val + "";// Сохраняем прочтенное значение
+                                }
+                                // Определяем по значению идентификатор
+                                try {
+                                    pokaz = dataManager
+                                            .load(StatPokaz.class)
+                                            .view("_local")
+                                            .query("e.code = :code and e.id_form=:form")
+
+                                            .parameter("code", Val + posfix)
+                                            .parameter("form", rep.getRef_stat_form_id().getId_form())
+                                            .one();
+                                } catch (Exception e) {
+                                    throw new java.lang.Error("Не найден показатель отчета Статистики с кодом " + Val + posfix);
+                                }
+
+                            }
+                            if ((cell.getColumnIndex() + 1) == ecol) {
+                                Val = getCellText(cell);
+                                // Проверяем на число
+                                try {
+                                    NValCell = new BigDecimal(Val);
+                                } catch (Exception e) {
+                                    throw new java.lang.Error("Значение " + Val + " не является числом");
+                                }
+                                // Записываем значения в отчет
+                                if (rep.getStat_schema().getId().equals("DIS")) { // Схема DIS
+
+                                    query = entityManager.createNativeQuery("select dis.sqn_DET_DIS.nextval from dual");
+                                    query.executeUpdate();
+                                    BigDecimal ii = (BigDecimal) query.getFirstResult();
+                                    try {
+                                        entityManager.createNativeQuery(
+
+                                                "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,znac,line,pr_period) \n" +
+                                                        "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?znac,?line,?pr_period)")
+                                                .setParameter("id", ii)
+                                                .setParameter("id_region", region)
+                                                .setParameter("d_report", dateParam)
+                                                .setParameter("id_pokaz", pokaz.getId_pokaz())
+                                                .setParameter("zo", zoParam)
+                                                .setParameter("id_filial", depParam)
+                                                .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+                                                .setParameter("znac", NValCell)
+                                                .setParameter("line", cell.getRowIndex() + 2 - srow)
+                                                .setParameter("pr_period", pr_period)
+                                                .executeUpdate();
+                                    } catch (Exception e) {
+
+                                        throw new java.lang.Error("Ошибка при вставке строки показателя DIS.DET_DIS id=" + ii + " id_region=" + region + ", d_report=" + dateParam + "\n " +
+                                                " id_pokaz=" + pokaz.getId_pokaz() + " zo=" + zoParam + " id_filial=" + depParam +
+                                                " id_form=" + rep.getRef_stat_form_id().getId_form().longValue() + " id_form=" + pokaz.getId_pokaz() +
+                                                " znac=" + NValCell + " line=" + (cell.getRowIndex() + 1 - srow) + " pr_period " + pr_period + "\n" +
+                                                " ERR: " + e.getMessage());
+
+
+                                    }
+                                } else {
+                                    query = entityManager.createNativeQuery("select stat.sqn_detail.nextval from dual");
+                                    query.executeUpdate();
+                                    BigDecimal yy = (BigDecimal) query.getFirstResult();
+                                    try {
+                                        entityManager.createNativeQuery(
+                                                "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?line,?pr_period,?zo)")
+                                                .setParameter("id", yy)
+                                                .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+                                                .setParameter("id_pokaz", pokaz.getId_pokaz())
+                                                .setParameter("d_report", dateParam)
+                                                .setParameter("znac", NValCell)
+                                                .setParameter("line", cell.getRowIndex() + 2 - srow)
+                                                .setParameter("pr_period", pr_period)
+                                                .setParameter("zo", zoParam)
+                                                .executeUpdate();
+                                    } catch (Exception e) {
+
+                                        throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL id=" + yy + ", d_report=" + dateParam + "\n " +
+                                                " id_pokaz=" + pokaz.getId_pokaz() + " zo=" + zoParam +
+                                                " id_form=" + rep.getRef_stat_form_id().getId_form().longValue() + " id_pokaz=" + pokaz.getId_pokaz() +
+                                                " znac=" + NValCell + " line=" + (cell.getRowIndex() + 2 - srow) + " pr_period " + pr_period + "\n" +
+                                                " ERR: " + e.getMessage());
+
+                                    }
+
+
+                                }
+
+                            }
+
+                        } else break;
+
+                    }
+                    log.info("row.getRowNum() " + row.getRowNum() + " max_row " + max_row);
+                    if ((row.getRowNum() + 1) == max_row - 1) break;
+                }
             }
+            finally{
+                    if (workbook != null) workbook.close();
+                }
             // фиксируем транзакцию
             tx.commit();
-        } catch (FileStorageException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
+
+            try {
+                delFile(fileDescriptor);
+            } catch (Exception e) {
+                throw new FileStorageException(FileStorageException.Type.IO_EXCEPTION, "File storage не смог удалить файл " + fileDescriptor.getId());
+            }
+
+        } catch (IOException | FileStorageException e) {
             e.printStackTrace();
         }
     }
     @Override
     public void expstat(Date dateParam, Integer depParam, String region, String zoParam, Report rep, FileDescriptor fileDescriptor) {
-        log.debug("Начало expstat");
+        /*
+         Обработка отчета типа "Матричный" и "Переменной длины" и загрузка в БД Статистика
+         - dateParam - дата отчета в БД Статистика
+         - depParam Идентификатор подразделения Саттистики
+         - region Код региона в Статистике
+         - zoParam Признак заключительных оборотов
+         - rep Загружаемый отчет модуля
+         - fileDescriptor Описатель файла во временном хранилище файлов сервера
+        */
         try (Transaction tx = persistence.getTransaction("dbstat")) {
 
             EntityManager entityManager = persistence.getEntityManager("dbstat");
@@ -655,7 +704,6 @@ public class LoadFileServiceBean implements LoadFileService {
             Workbook workbook = null;
             Query query = null;
             Object[] qrow = null;
-           // BigDecimal idsprav = null;
             ListIterator it; // итератор для обхода по списку показзателей
             int key_col = 1; // ключевой столбец для определения окончания строк
             long num_col = -1; //номер столбца настройки показателя
@@ -735,45 +783,38 @@ public class LoadFileServiceBean implements LoadFileService {
 
             // Просматриваем книгу и вытаскиваем данные показателей
             workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
-            Sheet firstSheet = workbook.getSheetAt(0);
+            try {
+                Sheet firstSheet = workbook.getSheetAt(workbook.getNumberOfSheets() - 1);
 
 
-            // Определяем максимальную строку для отчета переменной длинны
-            if (rep.getVid().getId()==1||rep.getVid().getId()==3) {
-                for (Row row : firstSheet) {
+                // Определяем максимальную строку для отчета переменной длинны
+                if (rep.getVid().getId() == 1 || rep.getVid().getId() == 3) {
+                    for (Row row : firstSheet) {
 
-                    for (Cell cell : row) {
-                        if ((cell.getColumnIndex() + 1) == key_col && getCellText(cell).equals("<<END>>")) {
-                            max_row = cell.getRowIndex() + 1;
-                            break;
+                        for (Cell cell : row) {
+                            if ((cell.getColumnIndex() + 1) == key_col && getCellText(cell).equals("<<END>>")) {
+                                max_row = cell.getRowIndex() + 1;
+                                break;
+                            }
+
                         }
-
+                        if (max_row != -1) break;
                     }
-                    if (max_row != -1) break;
                 }
-            }
-            if (max_row==-1&&(rep.getVid().getId()==1||rep.getVid().getId()==3)) throw new java.lang.Error("Не найден признак окончания данных <<END>>");
-            log.debug("Максимальная строка max_row="+max_row);
-            //----------------------------------------------------------------------
+                if (max_row == -1 && (rep.getVid().getId() == 1 || rep.getVid().getId() == 3))
+                    throw new java.lang.Error("Не найден признак окончания данных <<END>>");
+                log.debug("Максимальная строка max_row=" + max_row);
+                //----------------------------------------------------------------------
 
-            // Расчет признака периода
-            cal = Calendar.getInstance();
-            cal.setTime(dateParam);
-            String pr_period = (cal.get(Calendar.MONTH)+1)+ String.valueOf(cal.get(Calendar.YEAR)).substring(1,4);
-            /*java.text.SimpleDateFormat df1 = new java.text.SimpleDateFormat("MM");
-            java.text.SimpleDateFormat df2 = new java.text.SimpleDateFormat("YYYY");
-            String pr_period = Integer.getInteger(df1.format(dateParam))+String.valueOf(df2.format(dateParam)).substring(1,4);
-            */
+                // Расчет признака периода
+                cal = Calendar.getInstance();
+                cal.setTime(dateParam);
+                String pr_period = (cal.get(Calendar.MONTH) + 1) + String.valueOf(cal.get(Calendar.YEAR)).substring(1, 4);
 
-           // if (1==1) {throw new java.lang.Error(dateParam+ " - " +pr_period);}
-          //  Row row=null;
-          //  Cell cell = null;
-           // Iterator<Cell> itcell = null;
-           // Iterator<Row> itrow =null;
-               if (rep.getVid().getId() == 2&&rep.getStat_schema().getId().equals("STAT")) // Если отчет матричный и схема STAT, то номер строки пустой
-                 rep_row = -1;
-               else
-                 rep_row = 1;
+                if (rep.getVid().getId() == 2 && rep.getStat_schema().getId().equals("STAT")) // Если отчет матричный и схема STAT, то номер строки пустой
+                    rep_row = -1;
+                else
+                    rep_row = 1;
                 p_row = 0;
 
                 // Переводим цикл по показателям в начало
@@ -783,340 +824,341 @@ public class LoadFileServiceBean implements LoadFileService {
                 }
 
                 min_row = (int) qrow[1];
-                num_row = (int) qrow[1]+p_row;
+                num_row = (int) qrow[1] + p_row;
                 num_col = (int) qrow[2];
-                if (qrow[3]!=null)
+                if (qrow[3] != null)
                     id_pokaz = (Long) qrow[3];
                 else
                     id_pokaz = -1;
-                if (qrow[4]!=null)
+                if (qrow[4] != null)
                     id_sprav = (Long) qrow[4];
                 else
                     id_sprav = -1;
-                if (qrow[5]!=null)
+                if (qrow[5] != null)
                     sprav = (String) qrow[5];
                 else
-                    sprav= "";
-                if (qrow[6]!=null)
+                    sprav = "";
+                if (qrow[6] != null)
                     keyfield = (String) qrow[6];
                 else
                     keyfield = "";
-                if (qrow[7]!=null)
+                if (qrow[7] != null)
                     resfield = (String) qrow[7];
                 else
                     resfield = "";
-            if (qrow[8]!=null)
-                posfix = (String) qrow[8];
-            else
-                posfix = "";
+                if (qrow[8] != null)
+                    posfix = (String) qrow[8];
+                else
+                    posfix = "";
 
 
-
-                log.debug("Переменные expstat p_rowһ"+p_row+",min_row="+min_row+",num_row="+num_row+",num_col="+num_col+",id_pokaz="+id_pokaz+",id_sprav="+id_sprav+",sprav="+sprav+
-                        ",keyfield="+keyfield+",resfield="+resfield);
+                log.debug("Переменные expstat p_rowһ" + p_row + ",min_row=" + min_row + ",num_row=" + num_row + ",num_col=" + num_col + ",id_pokaz=" + id_pokaz + ",id_sprav=" + id_sprav + ",sprav=" + sprav +
+                        ",keyfield=" + keyfield + ",resfield=" + resfield);
 
                 // Находим нужную ячейку
                 log.debug("Вход в цикл по ячейкам " + num_col + "," + num_row);
-                for (Row row:firstSheet)
-                  {
-                    for (Cell cell:row) {
-                          // try {
-                            log.debug("Смотрим ячейку col=" + (cell.getColumnIndex() + 1) + ",row=" + (cell.getRowIndex() + 1) + "type=" + cell.getCellType().toString());
-                            if ((cell.getColumnIndex() + 1) == num_col && (cell.getRowIndex() + 1) == num_row) {
-                                // Значение ячейки
-                                ValCell = getCellText(cell);
+                for (Row row : firstSheet) {
+                    for (Cell cell : row) {
+                        // try {
+                        log.debug("Смотрим ячейку col=" + (cell.getColumnIndex() + 1) + ",row=" + (cell.getRowIndex() + 1) + "type=" + cell.getCellType().toString());
+                        if ((cell.getColumnIndex() + 1) == num_col && (cell.getRowIndex() + 1) == num_row) {
+                            // Значение ячейки
+                            ValCell = getCellText(cell);
 
-                                log.debug("Найдено соответствие ячейки num_row(" + num_row + "),num_col(" + num_col + ") - " + cell.getCellType().toString());
-                                log.debug("Переменные expstat p_row=" + p_row + ",min_row=" + min_row + ",num_row=" + num_row + ",num_col=" + num_col + ",id_pokaz=" + id_pokaz + ",id_sprav=" + id_sprav + ",sprav=" + sprav +
-                                        ",keyfield=" + keyfield + ",resfield=" + resfield);
-                                log.debug("ValCell=" + ValCell);
+                            log.debug("Найдено соответствие ячейки num_row(" + num_row + "),num_col(" + num_col + ") - " + cell.getCellType().toString());
+                            log.debug("Переменные expstat p_row=" + p_row + ",min_row=" + min_row + ",num_row=" + num_row + ",num_col=" + num_col + ",id_pokaz=" + id_pokaz + ",id_sprav=" + id_sprav + ",sprav=" + sprav +
+                                    ",keyfield=" + keyfield + ",resfield=" + resfield);
+                            log.debug("ValCell=" + ValCell);
 
-                                // Если преобразуется в число и нет указания на справочник, то записывать в основную таблицу
-                                boolean isnum;
+                            // Если преобразуется в число и нет указания на справочник, то записывать в основную таблицу
+                            boolean isnum;
+                            try {
+                                NValCell = new BigDecimal(ValCell);
+                                isnum = true;
+                            } catch (Exception e) {
+                                isnum = false;
+                            }
+
+                            log.debug("isnum=" + isnum);
+                            log.debug("схема=" + rep.getStat_schema().getId());
+                            // Обрабатываем ситуацию, когда связи с показателем Статистики не настроено
+                            if (id_pokaz == -1 && isnum) {
+                                // Находим показатель по коду, равным значению отчета
+                                StatPokaz pokaz;
                                 try {
-                                    NValCell = new BigDecimal(ValCell);
-                                    isnum = true;
+                                    pokaz = dataManager
+                                            .load(StatPokaz.class)
+                                            .view("_local")
+                                            .query("e.code = :code and e.id_form=:form")
+
+                                            .parameter("code", ValCell + posfix)
+                                            .parameter("form", rep.getRef_stat_form_id().getId_form())
+                                            .one();
                                 } catch (Exception e) {
-                                    isnum = false;
+                                    pokaz = null;
                                 }
-
-                                log.debug("isnum=" + isnum);
-                                log.debug("схема=" + rep.getStat_schema().getId());
-                                // Обрабатываем ситуацию, когда связи с показателем Статистики не настроено
-                                if (id_pokaz==-1&&isnum){
-                                    // Находим показатель по коду, равным значению отчета
-                                    StatPokaz pokaz;
+                                if (pokaz != null) {
+                                    id_pokaz = pokaz.getId_pokaz();
+                                    sprav = "STAT.S_POKAZ";
+                                    //  Определяем идентификатор справочника
                                     try {
-                                        pokaz = dataManager
-                                                .load(StatPokaz.class)
+                                        StatSprav entsprav = dataManager
+                                                .load(StatSprav.class)
                                                 .view("_local")
-                                                .query("e.code = :code and e.id_form=:form")
-
-                                                .parameter("code", ValCell+posfix)
-                                                .parameter("form", rep.getRef_stat_form_id().getId_form())
+                                                .query("e.nameTable = :code")
+                                                .parameter("code", sprav)
                                                 .one();
-                                    } catch(Exception e){
-                                        pokaz=null;
-                                    }
-                                    if (pokaz!=null) {
-                                        id_pokaz = pokaz.getId_pokaz();
-                                        sprav = "STAT.S_POKAZ";
-                                        //  Определяем идентификатор справочника
-                                        try {
-                                            StatSprav entsprav = dataManager
-                                                    .load(StatSprav.class)
-                                                    .view("_local")
-                                                    .query("e.nameTable = :code")
-                                                    .parameter("code", sprav)
-                                                    .one();
-                                            id_sprav = entsprav.getId_table();
-                                            keyfield = "ID";
-                                            resfield = "CODE_POKAZ";
-                                        } catch (Exception e) {
-                                            throw new java.lang.Error("Не нашел идентификатора справочника " + sprav);
-                                        }
-
+                                        id_sprav = entsprav.getId_table();
+                                        keyfield = "ID";
+                                        resfield = "CODE_POKAZ";
+                                    } catch (Exception e) {
+                                        throw new java.lang.Error("Не нашел идентификатора справочника " + sprav);
                                     }
 
                                 }
-
-                                if (id_pokaz!=-1) {
-
-                                    // Вставляем в таблицу со значениями показателей
-                                    if (rep.getStat_schema().getId().equals("DIS")) {
-                                        log.debug("Обработка схемы DIS");
-
-                                        query = entityManager.createNativeQuery("select dis.sqn_DET_DIS.nextval from dual");
-                                        query.executeUpdate();
-                                        ii = (BigDecimal) query.getFirstResult();
-
-                                        if (isnum && id_sprav == -1) { //Если число и нет указания на справочник, то записывать в DET_DIS
-
-                                            try {
-                                                entityManager.createNativeQuery(
-
-                                                        "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,znac,line,pr_period) \n"+
-                                                                "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?znac,?line,?pr_period)")
-                                                .setParameter("id", ii)
-                                                        .setParameter("id_region",region)
-                                                        .setParameter("d_report", dateParam)
-                                                        .setParameter("id_pokaz" ,id_pokaz)
-                                                        .setParameter("zo",zoParam)
-                                                        .setParameter("id_filial",depParam)
-                                                        .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
-                                                        .setParameter("znac",NValCell)
-                                                        .setParameter("line",rep_row)
-                                                        .setParameter("pr_period",pr_period)
-                                                        .executeUpdate();
-                                            } catch (Exception e) {
-
-                                                throw new java.lang.Error("Ошибка при вставке строки показателя DIS.DET_DIS " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + " ERR: " + e.getMessage());
-
-
-                                            }
-
-                                        } else {
-
-                                            try {
-                                                entityManager.createNativeQuery(
-                                                        "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,line,pr_period) \n"+
-                                                                "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?line,?pr_period)")
-                                                        .setParameter("id", ii)
-                                                        .setParameter("id_region",region)
-                                                        .setParameter("d_report", dateParam)
-                                                        .setParameter("id_pokaz" ,id_pokaz)
-                                                        .setParameter("zo",zoParam)
-                                                        .setParameter("id_filial",depParam)
-                                                        .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
-
-                                                        .setParameter("line",rep_row)
-                                                        .setParameter("pr_period",pr_period)
-                                                        .executeUpdate();
-                                            } catch (Exception e) {
-
-                                                throw new java.lang.Error("Ошибка при вставке строки показателя DIS.DET_DIS " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + " ERR: " + e.getMessage());
-
-                                            }
-
-                                            if (id_sprav == -1) {
-
-
-                                                entityManager.createNativeQuery(
-                                                        "insert into DIS.DET_DIS_PROPERTY(id_det,stroka) \n" +
-                                                                "values(" + ii + ",'" + ValCell + "')")
-                                                        .executeUpdate();
-                                            } else {
-                                                // делаем выборку из справочника по полю
-                                                try {
-
-                                                    query = entityManager.createNativeQuery("select " + keyfield + " from " + sprav + " where " + resfield + "='" + ValCell + posfix + "' and sysdate between dat_beg and nvl(dat_end,to_date('01.01.4700','dd.mm.yyyy'))");
-                                                    query.executeUpdate();
-                                                    NValCell = (BigDecimal) query.getFirstResult();
-                                                    IValCell = NValCell.toBigInteger();
-                                                    log.debug("Идентификатор справочника" + IValCell);
-                                                } catch (NullPointerException e) {
-                                                    throw new java.lang.Error("Не найдено значение справочника " + sprav + " в строке=" + num_row + " для значения " + ValCell + posfix);
-
-                                                }
-
-                                                entityManager.createNativeQuery(
-                                                        "insert into DIS.DET_DIS_PROPERTY(id_det,id_name_tables,id_sprav) \n" +
-                                                                "values(" + ii + "," + id_sprav + "," + IValCell + ")")
-                                                        .executeUpdate();
-
-                                            }
-                                        }
-
-                                    } else if (rep.getStat_schema().getId().equals("STAT")) {
-                                        log.debug("Обработка схемы STAT");
-                                        query = entityManager.createNativeQuery("select stat.sqn_detail.nextval from dual");
-                                        query.executeUpdate();
-                                        yy = (BigDecimal) query.getFirstResult();
-
-                                        if (isnum && id_sprav == -1) { //Если число и нет указания на справочник, то записывать в DETAIL
-                                            try {
-                                                if (rep_row==-1)
-                                                entityManager.createNativeQuery(
-                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?pr_period,?zo)")
-                                                        .setParameter("id",yy)
-                                                        .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
-                                                        .setParameter("id_pokaz",id_pokaz)
-                                                        .setParameter("d_report",dateParam)
-                                                        .setParameter("znac",NValCell)
-                                                        .setParameter("pr_period",pr_period)
-                                                        .setParameter("zo",zoParam)
-                                                        .executeUpdate();
-                                                else
-                                                    entityManager.createNativeQuery(
-                                                            "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?line,?pr_period,?zo)")
-                                                            .setParameter("id",yy)
-                                                            .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
-                                                            .setParameter("id_pokaz",id_pokaz)
-                                                            .setParameter("d_report",dateParam)
-                                                            .setParameter("znac",NValCell)
-                                                            .setParameter("line",rep_row)
-                                                            .setParameter("pr_period",pr_period)
-                                                            .setParameter("zo",zoParam)
-                                                            .executeUpdate();
-                                            } catch (Exception e) {
-
-                                                throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + "ERR: " + e.getMessage());
-
-                                            }
-
-                                        } else {
-                                            try {
-                                                if (rep_row==-1)
-                                                entityManager.createNativeQuery(
-                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?pr_period,?zo)")
-                                                        .setParameter("id",yy)
-                                                        .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
-                                                        .setParameter("id_pokaz",id_pokaz)
-                                                        .setParameter("d_report",dateParam)
-
-                                                        .setParameter("pr_period",pr_period)
-                                                        .setParameter("zo",zoParam)
-                                                        .executeUpdate();
-                                                else
-                                                    entityManager.createNativeQuery(
-                                                            "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?line,?pr_period,?zo)")
-                                                            .setParameter("id",yy)
-                                                            .setParameter("id_form",rep.getRef_stat_form_id().getId_form().longValue())
-                                                            .setParameter("id_pokaz",id_pokaz)
-                                                            .setParameter("d_report",dateParam)
-
-                                                            .setParameter("line",rep_row)
-                                                            .setParameter("pr_period",pr_period)
-                                                            .setParameter("zo",zoParam)
-                                                            .executeUpdate();
-                                            } catch (Exception e) {
-
-                                                throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + "ERR: " + e.getMessage());
-
-                                            }
-
-                                            if (id_sprav == -1) {
-
-                                                entityManager.createNativeQuery(
-
-                                                        "insert into STAT.DETAIL_PROPERTY(id,id_detail,stroka) \n" +
-                                                                "values(stat.sqn_detail_property.nextval," + yy + ",'" + ValCell + "')")
-                                                        .executeUpdate();
-                                            } else {
-                                                // делаем выборку из справочника по полю
-                                                try {
-
-                                                    query = entityManager.createNativeQuery("select " + keyfield + " from " + sprav + " where " + resfield + "='" + ValCell + posfix + "' and sysdate between dat_beg and nvl(dat_end,to_date('01.01.4700','dd.mm.yyyy'))");
-                                                    query.executeUpdate();
-                                                    NValCell = (BigDecimal) query.getFirstResult();
-                                                    IValCell = NValCell.toBigInteger();
-
-                                                } catch (NullPointerException e) {
-                                                    throw new java.lang.Error("Не найдено значение справочника " + sprav + " в строке=" + num_row + " для значения " + ValCell + posfix);
-                                                }
-
-                                                entityManager.createNativeQuery(
-                                                        "insert into STAT.DETAIL_PROPERTY(id,id_detail,id_name_tables,id_kod_spr) \n" +
-                                                                "values(stat.sqn_detail_property.nextval," + yy + "," + id_sprav + "," + IValCell + ")")
-                                                        .executeUpdate();
-
-                                            }
-                                        }
-                                    } else
-                                        throw new java.lang.Error("Не известный код схемы Статистики " + rep.getStat_schema().getId());
-                                }
-                                if (!it.hasNext()) {
-                                    while (it.hasPrevious()) it.previous();
-                                    p_row = p_row + 1;
-                                }
-
-                                    qrow = (Object[]) it.next();
-                                    num_col = (int) qrow[2];
-
-                                    num_row = (int) qrow[1]+p_row;
-
-                                    if (rep.getVid().getId() == 1) // Если отчет переменной длинны
-                                        rep_row = num_row - min_row + 1;
-
-                                    if (qrow[3] != null)
-                                        id_pokaz = (Long) qrow[3];
-                                    else
-                                        id_pokaz = -1;
-                                    if (qrow[4] != null)
-                                        id_sprav = (Long) qrow[4];
-                                    else
-                                        id_sprav = -1;
-                                    if (qrow[5] != null)
-                                        sprav = (String) qrow[5];
-                                    else
-                                        sprav = "";
-                                    if (qrow[6] != null)
-                                        keyfield = (String) qrow[6];
-                                    else
-                                        keyfield = "";
-                                    if (qrow[7] != null)
-                                        resfield = (String) qrow[7];
-                                    else
-                                        resfield = "";
-                                if (qrow[8]!=null)
-                                    posfix = (String) qrow[8];
-                                else
-                                    posfix = "";
 
                             }
-                           /*} catch (Exception e) {
-                               throw new java.lang.Error("Ошибка при импорте строки " + row.getRowNum() + ", не найдено импортируемое значение " + ValCell + " или иная ошибка "+
-                                       "\nТекст ошибки: " + e.getMessage() +
-                                       "\nИсправьте файл и импортируйте его заново!");
-                           }*/
+
+                            if (id_pokaz != -1) {
+
+                                // Вставляем в таблицу со значениями показателей
+                                if (rep.getStat_schema().getId().equals("DIS")) {
+                                    log.debug("Обработка схемы DIS");
+
+                                    query = entityManager.createNativeQuery("select dis.sqn_DET_DIS.nextval from dual");
+                                    query.executeUpdate();
+                                    ii = (BigDecimal) query.getFirstResult();
+
+                                    if (isnum && id_sprav == -1) { //Если число и нет указания на справочник, то записывать в DET_DIS
+
+                                        try {
+                                            entityManager.createNativeQuery(
+
+                                                    "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,znac,line,pr_period) \n" +
+                                                            "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?znac,?line,?pr_period)")
+                                                    .setParameter("id", ii)
+                                                    .setParameter("id_region", region)
+                                                    .setParameter("d_report", dateParam)
+                                                    .setParameter("id_pokaz", id_pokaz)
+                                                    .setParameter("zo", zoParam)
+                                                    .setParameter("id_filial", depParam)
+                                                    .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+                                                    .setParameter("znac", NValCell)
+                                                    .setParameter("line", rep_row)
+                                                    .setParameter("pr_period", pr_period)
+                                                    .executeUpdate();
+                                        } catch (Exception e) {
+
+                                            throw new java.lang.Error("Ошибка при вставке строки показателя DIS.DET_DIS " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + " ERR: " + e.getMessage());
+
+
+                                        }
+
+                                    } else {
+
+                                        try {
+                                            entityManager.createNativeQuery(
+                                                    "insert into DIS.DET_DIS(id,id_region,d_report,id_pokaz,zo,id_filial,id_form,line,pr_period) \n" +
+                                                            "values(?id,?id_region,?d_report,?id_pokaz,?zo,?id_filial,?id_form,?line,?pr_period)")
+                                                    .setParameter("id", ii)
+                                                    .setParameter("id_region", region)
+                                                    .setParameter("d_report", dateParam)
+                                                    .setParameter("id_pokaz", id_pokaz)
+                                                    .setParameter("zo", zoParam)
+                                                    .setParameter("id_filial", depParam)
+                                                    .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+
+                                                    .setParameter("line", rep_row)
+                                                    .setParameter("pr_period", pr_period)
+                                                    .executeUpdate();
+                                        } catch (Exception e) {
+
+                                            throw new java.lang.Error("Ошибка при вставке строки показателя DIS.DET_DIS " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + " ERR: " + e.getMessage());
+
+                                        }
+
+                                        if (id_sprav == -1) {
+
+
+                                            entityManager.createNativeQuery(
+                                                    "insert into DIS.DET_DIS_PROPERTY(id_det,stroka) \n" +
+                                                            "values(" + ii + ",'" + ValCell + "')")
+                                                    .executeUpdate();
+                                        } else {
+                                            // делаем выборку из справочника по полю
+                                            try {
+
+                                                query = entityManager.createNativeQuery("select " + keyfield + " from " + sprav + " where " + resfield + "='" + ValCell + posfix + "' and sysdate between dat_beg and nvl(dat_end,to_date('01.01.4700','dd.mm.yyyy'))");
+                                                query.executeUpdate();
+                                                NValCell = (BigDecimal) query.getFirstResult();
+                                                IValCell = NValCell.toBigInteger();
+                                                log.debug("Идентификатор справочника" + IValCell);
+                                            } catch (NullPointerException e) {
+                                                throw new java.lang.Error("Не найдено значение справочника " + sprav + " в строке=" + num_row + " для значения " + ValCell + posfix);
+
+                                            }
+
+                                            entityManager.createNativeQuery(
+                                                    "insert into DIS.DET_DIS_PROPERTY(id_det,id_name_tables,id_sprav) \n" +
+                                                            "values(" + ii + "," + id_sprav + "," + IValCell + ")")
+                                                    .executeUpdate();
+
+                                        }
+                                    }
+
+                                } else if (rep.getStat_schema().getId().equals("STAT")) {
+                                    log.debug("Обработка схемы STAT");
+                                    query = entityManager.createNativeQuery("select stat.sqn_detail.nextval from dual");
+                                    query.executeUpdate();
+                                    yy = (BigDecimal) query.getFirstResult();
+
+                                    if (isnum && id_sprav == -1) { //Если число и нет указания на справочник, то записывать в DETAIL
+                                        try {
+                                            if (rep_row == -1)
+                                                entityManager.createNativeQuery(
+                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?pr_period,?zo)")
+                                                        .setParameter("id", yy)
+                                                        .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+                                                        .setParameter("id_pokaz", id_pokaz)
+                                                        .setParameter("d_report", dateParam)
+                                                        .setParameter("znac", NValCell)
+                                                        .setParameter("pr_period", pr_period)
+                                                        .setParameter("zo", zoParam)
+                                                        .executeUpdate();
+                                            else
+                                                entityManager.createNativeQuery(
+                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,znac,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?znac,?line,?pr_period,?zo)")
+                                                        .setParameter("id", yy)
+                                                        .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+                                                        .setParameter("id_pokaz", id_pokaz)
+                                                        .setParameter("d_report", dateParam)
+                                                        .setParameter("znac", NValCell)
+                                                        .setParameter("line", rep_row)
+                                                        .setParameter("pr_period", pr_period)
+                                                        .setParameter("zo", zoParam)
+                                                        .executeUpdate();
+                                        } catch (Exception e) {
+
+                                            throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + "ERR: " + e.getMessage());
+
+                                        }
+
+                                    } else {
+                                        try {
+                                            if (rep_row == -1)
+                                                entityManager.createNativeQuery(
+                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?pr_period,?zo)")
+                                                        .setParameter("id", yy)
+                                                        .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+                                                        .setParameter("id_pokaz", id_pokaz)
+                                                        .setParameter("d_report", dateParam)
+
+                                                        .setParameter("pr_period", pr_period)
+                                                        .setParameter("zo", zoParam)
+                                                        .executeUpdate();
+                                            else
+                                                entityManager.createNativeQuery(
+                                                        "insert into STAT.DETAIL(id,id_form,id_pokaz,d_report,line,pr_period,zo) values(?id,?id_form,?id_pokaz,?d_report,?line,?pr_period,?zo)")
+                                                        .setParameter("id", yy)
+                                                        .setParameter("id_form", rep.getRef_stat_form_id().getId_form().longValue())
+                                                        .setParameter("id_pokaz", id_pokaz)
+                                                        .setParameter("d_report", dateParam)
+
+                                                        .setParameter("line", rep_row)
+                                                        .setParameter("pr_period", pr_period)
+                                                        .setParameter("zo", zoParam)
+                                                        .executeUpdate();
+                                        } catch (Exception e) {
+
+                                            throw new java.lang.Error("Ошибка при вставке строки показателя STAT.DETAIL " + id_pokaz + " ncol=" + num_col + ", ValCell=" + ValCell + "ERR: " + e.getMessage());
+
+                                        }
+
+                                        if (id_sprav == -1) {
+
+                                            entityManager.createNativeQuery(
+
+                                                    "insert into STAT.DETAIL_PROPERTY(id,id_detail,stroka) \n" +
+                                                            "values(stat.sqn_detail_property.nextval," + yy + ",'" + ValCell + "')")
+                                                    .executeUpdate();
+                                        } else {
+                                            // делаем выборку из справочника по полю
+                                            try {
+
+                                                query = entityManager.createNativeQuery("select " + keyfield + " from " + sprav + " where " + resfield + "='" + ValCell + posfix + "' and sysdate between dat_beg and nvl(dat_end,to_date('01.01.4700','dd.mm.yyyy'))");
+                                                query.executeUpdate();
+                                                NValCell = (BigDecimal) query.getFirstResult();
+                                                IValCell = NValCell.toBigInteger();
+
+                                            } catch (NullPointerException e) {
+                                                throw new java.lang.Error("Не найдено значение справочника " + sprav + " в строке=" + num_row + " для значения " + ValCell + posfix);
+                                            }
+
+                                            entityManager.createNativeQuery(
+                                                    "insert into STAT.DETAIL_PROPERTY(id,id_detail,id_name_tables,id_kod_spr) \n" +
+                                                            "values(stat.sqn_detail_property.nextval," + yy + "," + id_sprav + "," + IValCell + ")")
+                                                    .executeUpdate();
+
+                                        }
+                                    }
+                                } else
+                                    throw new java.lang.Error("Не известный код схемы Статистики " + rep.getStat_schema().getId());
+                            }
+                            if (!it.hasNext()) {
+                                while (it.hasPrevious()) it.previous();
+                                p_row = p_row + 1;
+                            }
+
+                            qrow = (Object[]) it.next();
+                            num_col = (int) qrow[2];
+
+                            num_row = (int) qrow[1] + p_row;
+
+                            if (rep.getVid().getId() == 1) // Если отчет переменной длинны
+                                rep_row = num_row - min_row + 1;
+
+                            if (qrow[3] != null)
+                                id_pokaz = (Long) qrow[3];
+                            else
+                                id_pokaz = -1;
+                            if (qrow[4] != null)
+                                id_sprav = (Long) qrow[4];
+                            else
+                                id_sprav = -1;
+                            if (qrow[5] != null)
+                                sprav = (String) qrow[5];
+                            else
+                                sprav = "";
+                            if (qrow[6] != null)
+                                keyfield = (String) qrow[6];
+                            else
+                                keyfield = "";
+                            if (qrow[7] != null)
+                                resfield = (String) qrow[7];
+                            else
+                                resfield = "";
+                            if (qrow[8] != null)
+                                posfix = (String) qrow[8];
+                            else
+                                posfix = "";
+
                         }
-                    if (num_row==max_row) break;
+
+                    }
+                    if (num_row == max_row) break;
                 }
-
-            if (workbook != null) workbook.close();
-
+            }
+            finally {
+                if (workbook != null) workbook.close();
+            }
             tx2.commit();
             tx.commit();
+
+            try {
+                delFile(fileDescriptor);
+            } catch (Exception e) {
+                throw new FileStorageException(FileStorageException.Type.IO_EXCEPTION, "File storage не смог удалить файл " + fileDescriptor.getId());
+            }
 
         } catch (IOException | FileStorageException e) {
             e.printStackTrace();
@@ -1125,6 +1167,10 @@ public class LoadFileServiceBean implements LoadFileService {
 
     @Override
     public int getDepartmentStatId(String depcode){
+        /*
+        Функция определяет идентификатор филиала Статистики для указания в отчетах схемы DIS
+        depcode - Код подразделения (000,120...)
+         */
         try {
 
             Department dep = dataManager
@@ -1142,6 +1188,10 @@ public class LoadFileServiceBean implements LoadFileService {
     }
     @Override
     public String getDepartmentRegion(String depcode){
+        /*
+        Функция определяет код региона Статистики для подразделения
+        depcode - Код подразделения (000,120...)
+         */
         try {
 
             Department dep = dataManager
@@ -1160,29 +1210,28 @@ public class LoadFileServiceBean implements LoadFileService {
 
     @Override
     public void expstatidpokaz(Report rep, FileDescriptor fileDescriptor) {
+        /*
+        Функция загружает из файла идентификаторы показателей Статистики и в соответствии с расположением показателей в шаблоне модуля присваивает показателю этот идентификатор
+        Шаблон Статистики и шаблон модуля по показателям должны совпадать
+        Перед загрузкой  идентификаторов надо проверить корректность данных показателей модуля в части столбца и строки
+        Параметры:
+         - rep - Отчет, для которого идет загрузка
+         - fileDescriptor - Описатель файла во временном хранилище файлов на сервере
+        Возможные ошибки:
+         - Не найден показатель Статистики с идентификатором
+         - Не найдено показателей для обработки файла. Проверьте настройку модуля и повторите импорт.
+         */
         log.debug("Начало expstatidpokaz");
         try (Transaction tx = persistence.getTransaction()) {
 
             Workbook workbook = null;
-            Query query = null;
             Object[] qrow = null;
-            // BigDecimal idsprav = null;
             ListIterator it; // итератор для обхода по списку показзателей
-            int key_col = 1; // ключевой столбец для определения окончания строк
             long num_col = -1; //номер столбца настройки показателя
             long num_row = -1; //номер строки настройки показателя
             long id_pokaz = -1; // идентификатор показателя
-            long id_sprav = -1; // идентификатор показателя
-            String sprav = ""; // наименование справочника
-            String keyfield = ""; // клюючевое поле справочника
-            String resfield = ""; // поле результата справочника
-            String posfix = null;// набор символов, который используется при поиске в справочнике значения. добавляется справа
-            BigDecimal yy = null;
-            BigDecimal ii = null;
             String ValCell = null;
             BigDecimal NValCell = null;
-            BigInteger IValCell = null;
-
 
             log.debug("Обработка отчета rep.getId()=" + rep.getId());
             // Читаем показатели из справочника
@@ -1204,106 +1253,107 @@ public class LoadFileServiceBean implements LoadFileService {
 
             // Просматриваем книгу и вытаскиваем данные показателей
             workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
-            Sheet firstSheet = workbook.getSheetAt(0);
+            try {
+                Sheet firstSheet = workbook.getSheetAt(0);
 
+                it = l.listIterator();
+                if (it.hasNext()) {
+                    qrow = (Object[]) it.next();
+                }
+                UUID iid = (UUID) qrow[0];
+                num_row = (int) qrow[1];
+                num_col = (int) qrow[2];
+                if (qrow[3] != null)
+                    id_pokaz = (Long) qrow[3];
+                else
+                    id_pokaz = -1;
 
-            // Переводим цикл по показателям в начало
-            it = l.listIterator();
-            if (it.hasNext()) {
-                qrow = (Object[]) it.next();
-            }
-            UUID iid= (UUID) qrow[0];
-            num_row = (int) qrow[1];
-            num_col = (int) qrow[2];
-            if (qrow[3]!=null)
-                id_pokaz = (Long) qrow[3];
-            else
-                id_pokaz = -1;
+                // Находим нужную ячейку
+                log.debug("Вход в цикл по ячейкам " + num_col + "," + num_row);
+                boolean inloop = true;
 
-            log.debug("Переменные expstat num_row="+num_row+",num_col="+num_col+",id_pokaz="+id_pokaz+",id_sprav="+id_sprav+",sprav="+sprav+
-                    ",keyfield="+keyfield+",resfield="+resfield);
+                for (Row row : firstSheet) {
+                    for (Cell cell : row) {
+                        try {
+                            log.debug("Смотрим ячейку col=" + (cell.getColumnIndex() + 1) + ",row=" + (cell.getRowIndex() + 1) + "type=" + cell.getCellType().toString());
+                            // Если координаты для показателя модуля найдены
+                            if ((cell.getColumnIndex() + 1) == num_col && (cell.getRowIndex() + 1) == num_row) {
+                                // Значение ячейки
+                                ValCell = getCellText(cell);
 
-            // Находим нужную ячейку
-            log.debug("Вход в цикл по ячейкам " + num_col + "," + num_row);
-            boolean inloop = true;
-            for (Row row:firstSheet)
-            {
-                for (Cell cell:row) {
-                    try{
-                        log.debug("Смотрим ячейку col=" + (cell.getColumnIndex() + 1) + ",row=" + (cell.getRowIndex() + 1) + "type=" + cell.getCellType().toString());
-                        if ((cell.getColumnIndex() + 1) == num_col && (cell.getRowIndex() + 1) == num_row) {
-                            // Значение ячейки
-                            ValCell = getCellText(cell);
-
-                            log.debug("Найдено соответствие ячейки num_row(" + num_row + "),num_col(" + num_col + ") - " + cell.getCellType().toString());
-                            log.debug("Переменные expstat num_row=" + num_row + ",num_col=" + num_col + ",id_pokaz=" + id_pokaz + ",id_sprav=" + id_sprav + ",sprav=" + sprav +
-                                    ",keyfield=" + keyfield + ",resfield=" + resfield);
-                            log.debug("ValCell=" + ValCell);
-
-                            // Если преобразуется в число и нет указания на справочник, то записывать в основную таблицу
-                            boolean isnum;
-                            try {
-                                NValCell = new BigDecimal(ValCell);
-                                isnum = true;
-                            } catch (Exception e) {
-                                isnum = false;
-                            }
-                            // Обрабатываем только показатели с числовым выражением
-                            if (isnum) {
-                               // Определяем строку показателей Статистики
-                                StatPokaz pokaz;
+                                // Если преобразуется в число и нет указания на справочник, то записывать в основную таблицу
+                                boolean isnum;
                                 try {
-                                    pokaz = dataManager
-                                            .load(StatPokaz.class)
-                                            .view("_local")
-                                            .query("e.id_pokaz = :idpokaz and e.id_form=:form")
-
-                                            .parameter("idpokaz", NValCell.intValue())
-                                            .parameter("form", rep.getRef_stat_form_id().getId_form())
-                                            .one();
-                                } catch(javax.persistence.NoResultException e){
-                                    throw new RuntimeException("Не найде показатель Статистики с идентификатором "+NValCell.longValue(),e);
+                                    NValCell = new BigDecimal(ValCell);
+                                    isnum = true;
+                                } catch (Exception e) {
+                                    isnum = false;
                                 }
-                               // Записываем ссылку на него в настройках показателей
-                                persistence.getEntityManager().createNativeQuery("update statload_var set ID_STATPOKAZ=?pokaz where id=?iid")
-                                .setParameter("pokaz",pokaz.getId())
-                                .setParameter("iid",iid)
-                                        .executeUpdate();
+                                // Обрабатываем только показатели с числовым выражением
+                                if (isnum) {
+                                    // Определяем строку показателей Статистики
+                                    StatPokaz pokaz;
+                                    try {
+                                        pokaz = dataManager
+                                                .load(StatPokaz.class)
+                                                .view("_local")
+                                                .query("e.id_pokaz = :idpokaz and e.id_form=:form")
+
+                                                .parameter("idpokaz", NValCell.intValue())
+                                                .parameter("form", rep.getRef_stat_form_id().getId_form())
+                                                .one();
+                                    } catch (javax.persistence.NoResultException e) {
+                                        throw new RuntimeException("Не найден показатель Статистики с идентификатором " + NValCell.longValue(), e);
+                                    }
+                                    // Записываем ссылку на него в настройках показателей
+                                    persistence.getEntityManager().createNativeQuery("update statload_var set ID_STATPOKAZ=?pokaz where id=?iid")
+                                            .setParameter("pokaz", pokaz.getId())
+                                            .setParameter("iid", iid)
+                                            .executeUpdate();
+
+                                }
+                                if (it.hasNext()) {
+                                    qrow = (Object[]) it.next();
+                                } else { // Если закончились записи, то выходи из всех циклов
+
+                                    inloop = false;
+                                    break;
+                                }
+
+                                iid = (UUID) qrow[0];
+                                num_col = (int) qrow[2];
+
+                                num_row = (int) qrow[1];
+
+                                if (qrow[3] != null)
+                                    id_pokaz = (Long) qrow[3];
+                                else
+                                    id_pokaz = -1;
 
                             }
-                            if (it.hasNext()) {
-                                qrow = (Object[]) it.next();
-                            }
-                            else { // Если закончились записи, то выходи из всех циклов
-
-                                inloop=false;
-                                break;
-                            }
-
-                            iid= (UUID) qrow[0];
-                            num_col = (int) qrow[2];
-
-                            num_row = (int) qrow[1];
-
-                            if (qrow[3] != null)
-                                id_pokaz = (Long) qrow[3];
-                            else
-                                id_pokaz = -1;
-
+                        } catch (Exception e) {
+                            throw new java.lang.Error("Ошибка при импорте строки " + row.getRowNum() + ", не найдено импортируемое значение " + ValCell + " или иная ошибка " +
+                                    "\nТекст ошибки: " + e.getMessage() +
+                                    "\nИсправьте файл и импортируйте его заново!");
                         }
-                    } catch (Exception e) {
-                        throw new java.lang.Error("Ошибка при импорте строки " + row.getRowNum() + ", не найдено импортируемое значение " + ValCell + " или иная ошибка "+
-                                "\nТекст ошибки: " + e.getMessage() +
-                                "\nИсправьте файл и импортируйте его заново!");
+                        if (!inloop) break;
                     }
                     if (!inloop) break;
                 }
-                if (!inloop) break;
+            }
+            finally {
+
+                if (workbook != null) workbook.close();
             }
 
-            if (workbook != null) workbook.close();
-
             tx.commit();
+
+            try {
+                delFile(fileDescriptor);
+            } catch (Exception e) {
+                throw new FileStorageException(FileStorageException.Type.IO_EXCEPTION, "File storage не смог удалить файл " + fileDescriptor.getId());
+            }
+
 
         } catch (IOException | FileStorageException e) {
             e.printStackTrace();

@@ -202,7 +202,7 @@ public class ReportBrowse extends StandardLookup<Report> {
             int c2=loadFileSvc.checkstat(dt2,reportsDc.getItem());
             if (c1!=0&&c2==0) {
                 loadFileSvc.copystat(dt1, dt2, reportsDc.getItem());
-                notifications.create()
+                notifications.create(Notifications.NotificationType.TRAY)
                         .withCaption("Отчет скопирован с отражением идентификаторов показателей")
                         .show();
             } else {
@@ -214,7 +214,7 @@ public class ReportBrowse extends StandardLookup<Report> {
                             .withActions(
                                     new DialogAction(DialogAction.Type.OK).withHandler(e -> {
                                         loadFileSvc.copystat(dt1, dt2, reportsDc.getItem());
-                                        notifications.create()
+                                        notifications.create(Notifications.NotificationType.TRAY)
                                                 .withCaption("Отчет скопирован с отражением идентификаторов показателей")
                                                 .show();
                                     }),
