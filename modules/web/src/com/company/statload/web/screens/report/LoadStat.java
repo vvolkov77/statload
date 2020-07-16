@@ -62,7 +62,7 @@ public class LoadStat extends StandardLookup<Report> {
                             }
                             dataManager.commit(fd);
 
-                            String depcode = fd.getName().replace(".xls", "");
+                            String depcode = fd.getName().substring(0,3);
                             if (dateParam.isEmpty()) throw new java.lang.Error("Введите дату отчета");
                             try {
                                 if (reportsDc.getItem().getVid().getId()==3)
