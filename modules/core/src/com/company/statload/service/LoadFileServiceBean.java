@@ -500,6 +500,7 @@ public class LoadFileServiceBean implements LoadFileService {
                 )
                         .setParameter("rep", rep.getId())
                         .getResultList();
+                tx2.commit();
                 Iterator it = l.listIterator();
                 if (it.hasNext()) {
                     Object[] qrow = (Object[]) it.next();
@@ -526,7 +527,7 @@ public class LoadFileServiceBean implements LoadFileService {
                     srow = 1; // Строка начала отчета
                     posfix = ""; // Постфикс показателя
                 }
-                tx2.commit();
+
             } catch (Exception e){
                 // Если нет параметров, то принимаем за начало отчета первую строку и первый столбец файла
                 scol = 1; // Столбец начала отчета
@@ -585,6 +586,7 @@ public class LoadFileServiceBean implements LoadFileService {
                                             .parameter("code", Val + posfix)
                                             .parameter("form", rep.getRef_stat_form_id().getId_form())
                                             .one();
+
                                 } catch (Exception e) {
                                     throw new java.lang.Error("Не найден показатель отчета Статистики с кодом " + Val + posfix);
                                 }

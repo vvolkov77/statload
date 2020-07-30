@@ -61,15 +61,22 @@ public class LoadStat extends StandardLookup<Report> {
                                 throw new java.lang.Error("Ошибка сохранения во временное серверное хранилище файлов", e);
                             }
                             dataManager.commit(fd);
-
+                            if (dateParam.isEmpty()) {
+                                notifications.create(Notifications.NotificationType.ERROR)
+                                        .withCaption("Ошибка!!! \n Отсутствует дата отчета.")
+                                        .show();
+                                multiUploadField.clearUploads();
+                               return;
+                            }
                             String depcode = fd.getName().substring(0,3);
-                            if (dateParam.isEmpty()) throw new java.lang.Error("Введите дату отчета");
+                            int depStatId = loadFileSvc.getDepartmentStatId(depcode);
+                            String regStatId = loadFileSvc.getDepartmentRegion(depcode);
                             try {
                                 if (reportsDc.getItem().getVid().getId()==3)
-                                   loadFileSvc.expbalstat((Date) dateParam.getValue(), loadFileSvc.getDepartmentStatId(depcode), loadFileSvc.getDepartmentRegion(depcode),
+                                   loadFileSvc.expbalstat((Date) dateParam.getValue(), depStatId, regStatId,
                                         zoParam.isChecked() ? "1" : " ", reportsDc.getItem(), fd);
                                 else
-                                  loadFileSvc.expstat((Date) dateParam.getValue(), loadFileSvc.getDepartmentStatId(depcode), loadFileSvc.getDepartmentRegion(depcode),
+                                  loadFileSvc.expstat((Date) dateParam.getValue(), depStatId, regStatId,
                                         zoParam.isChecked() ? "1" : " ", reportsDc.getItem(), fd);
                             } catch(Exception e){
                                 multiUploadField.clearUploads();
