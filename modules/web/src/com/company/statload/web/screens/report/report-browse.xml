@@ -5,6 +5,9 @@
         focusComponent="reportsTable"
         messagesPack="com.company.statload.web.screens.report">
     <data readOnly="true">
+        <instance id="DepartmentDc" class="com.company.statload.entity.Department" view="_local">
+            <loader/>
+        </instance>
         <collection id="reportsDc"
                     class="com.company.statload.entity.Report"
                     view="report-view-browse">

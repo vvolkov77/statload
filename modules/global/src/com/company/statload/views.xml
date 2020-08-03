@@ -13,10 +13,7 @@
     <view entity="statload_Report" name="report-view-browse" extends="_local">
         <property name="ref_stat_form_id" fetch="AUTO" view="_local"/>
     </view>
-    <view entity="statload_Department" name="department-view" extends="_minimal">
-        <property name="name"/>
-        <property name="stat_bank_id"/>
-        <property name="region"/>
+    <view entity="statload_Department" name="department-view" extends="_local">
     </view>
     <view entity="statload_Var" name="map-var-view" extends="_local">
         <property name="ref_report" view="_minimal">

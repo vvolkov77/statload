@@ -104,6 +104,19 @@ public class ReportBrowse extends StandardLookup<Report> {
     private void inputDialogFacetDialogResultHandler(InputDialog.InputDialogResult inputDialogResult) {
         //dialogs.createMessageDialog().withCaption("Information").withMessage(inputDialogResult.getCloseAction().toString()+" - " + DialogAction.Type.OK).show();
         if (inputDialogResult.closedWith(DialogOutcome.OK)){
+
+            // Проверяем на обязательность заполнения полей
+            Date dt = inputDialogResult.getValue("dateParam");
+
+            Department dep= inputDialogResult.getValue("depParam");
+            /*notifications.create(Notifications.NotificationType.TRAY)
+                    .withCaption(dep.getCode())
+                    .show();*/
+            Integer dep_id = dep.getStat_bank_id();
+            String region = dep.getRegion();
+
+            Boolean zo= inputDialogResult.getValue("zoParam");
+
             FileUploadDialog dialog = (FileUploadDialog) screens.create("fileUploadDialog", OpenMode.DIALOG);
             dialog.setCaption("Загрузка файла отчета в БД Статистика");
             dialog.addCloseWithCommitListener(() -> {
@@ -120,14 +133,7 @@ public class ReportBrowse extends StandardLookup<Report> {
                 } catch (FileStorageException e) {
                     throw new RuntimeException(e);
                 }
-                // Проверяем на обязательность заполнения полей
-                 Date dt = inputDialogResult.getValue("dateParam");
 
-                Department dep= inputDialogResult.getValue("depParam");
-                    Integer dep_id = dep.getStat_bank_id();
-                    String region = dep.getRegion();
-
-                Boolean zo= inputDialogResult.getValue("zoParam");
                  if (reportsDc.getItem().getVid().getId()==3)
                      loadFileSvc.expbalstat(dt,dep_id,region, zo ? "1" : " ", reportsDc.getItem(), fileDescriptor);
                  else

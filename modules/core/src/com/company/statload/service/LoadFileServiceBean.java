@@ -449,6 +449,7 @@ public class LoadFileServiceBean implements LoadFileService {
 
             Transaction tx2 = persistence.getTransaction();
 
+
             Workbook workbook = null;
             Query query = null;
             int max_row = -1;
@@ -500,7 +501,7 @@ public class LoadFileServiceBean implements LoadFileService {
                 )
                         .setParameter("rep", rep.getId())
                         .getResultList();
-                tx2.commit();
+                tx2.end();
                 Iterator it = l.listIterator();
                 if (it.hasNext()) {
                     Object[] qrow = (Object[]) it.next();
@@ -586,7 +587,7 @@ public class LoadFileServiceBean implements LoadFileService {
                                             .parameter("code", Val + posfix)
                                             .parameter("form", rep.getRef_stat_form_id().getId_form())
                                             .one();
-
+                                    tx2.end();
                                 } catch (Exception e) {
                                     throw new java.lang.Error("Не найден показатель отчета Статистики с кодом " + Val + posfix);
                                 }
