@@ -1,31 +1,27 @@
 package com.company.statload.service;
 
 import com.company.statload.entity.*;
-import com.esotericsoftware.minlog.Log;
 import com.haulmont.cuba.core.EntityManager;
 import com.haulmont.cuba.core.Persistence;
 import com.haulmont.cuba.core.Query;
 import com.haulmont.cuba.core.Transaction;
 import com.haulmont.cuba.core.app.FileStorageAPI;
-import com.haulmont.cuba.core.app.ServerConfig;
 import com.haulmont.cuba.core.entity.FileDescriptor;
 import com.haulmont.cuba.core.global.DataManager;
 import com.haulmont.cuba.core.global.FileStorageException;
-
 import org.apache.poi.ss.usermodel.*;
-
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.inject.Inject;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.SimpleDateFormat;
 import java.util.*;
-
-import static org.apache.poi.ss.usermodel.CellType.BLANK;
 
 @Service(LoadFileService.NAME)
 public class LoadFileServiceBean implements LoadFileService {
@@ -103,7 +99,12 @@ public class LoadFileServiceBean implements LoadFileService {
 
             String NamePokaz;
             String ValCell;
-            workbook = WorkbookFactory.create(fileStorageAPI.openStream(fdscr));
+            //workbook = WorkbookFactory.create(fileStorageAPI.openStream(fdscr));
+            InputStream inp = fileStorageAPI.openStream(fdscr);
+            log.info("Stream opened");
+            workbook = new XSSFWorkbook(inp);
+            log.info("Workbook opened");
+
             Sheet firstSheet = workbook.getSheetAt(0);
             Var U = null;
             for (Row row : firstSheet) {
@@ -182,7 +183,12 @@ public class LoadFileServiceBean implements LoadFileService {
             try (Transaction tx = persistence.createTransaction()) {
 
                 String ValCell;
-                workbook = WorkbookFactory.create(fileStorageAPI.openStream(fdscr));
+                //workbook = WorkbookFactory.create(fileStorageAPI.openStream(fdscr));
+                InputStream inp = fileStorageAPI.openStream(fdscr);
+                log.info("Stream opened");
+                workbook = new XSSFWorkbook(inp);
+                log.info("Workbook opened");
+
                 Sheet firstSheet = workbook.getSheetAt(0);
 
                 String mod_var = "";
@@ -449,7 +455,6 @@ public class LoadFileServiceBean implements LoadFileService {
 
             Transaction tx2 = persistence.getTransaction();
 
-
             Workbook workbook = null;
             Query query = null;
             int max_row = -1;
@@ -538,11 +543,15 @@ public class LoadFileServiceBean implements LoadFileService {
             }
 
             // 4. Находим признак окончания отчета
-            workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
-            try {
-                Sheet firstSheet = workbook.getSheetAt(workbook.getNumberOfSheets() - 1);
+            InputStream inp = fileStorageAPI.openStream(fileDescriptor);
+            log.info("Stream opened");
+            workbook = new XSSFWorkbook(inp);
+            log.info("Workbook opened");
 
-                for (Row row : firstSheet) {
+            try {
+                Sheet lastSheet = workbook.getSheetAt(workbook.getNumberOfSheets() - 1);
+
+                for (Row row : lastSheet) {
 
                     for (Cell cell : row) {
                         if ((cell.getColumnIndex() + 1) == key_col && getCellText(cell).equals("<<END>>")) {
@@ -563,7 +572,7 @@ public class LoadFileServiceBean implements LoadFileService {
                 StatPokaz pokaz = null;
                 BigDecimal NValCell;
 
-                for (Row row : firstSheet) {
+                for (Row row : lastSheet) {
 
                     for (Cell cell : row) {
 
@@ -785,7 +794,12 @@ public class LoadFileServiceBean implements LoadFileService {
             if (cou==0) throw new java.lang.Error("Не найдено показателей для обработки файла. Проверьте настройку модуля и повторите импорт.");
 
             // Просматриваем книгу и вытаскиваем данные показателей
-            workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
+            //workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
+            InputStream inp = fileStorageAPI.openStream(fileDescriptor);
+            log.info("Stream opened");
+            workbook = new XSSFWorkbook(inp);
+            log.info("Workbook opened");
+
             try {
                 Sheet firstSheet = workbook.getSheetAt(workbook.getNumberOfSheets() - 1);
 
@@ -1255,7 +1269,12 @@ public class LoadFileServiceBean implements LoadFileService {
             if (cou==0) throw new java.lang.Error("Не найдено показателей для обработки файла. Проверьте настройку модуля и повторите импорт.");
 
             // Просматриваем книгу и вытаскиваем данные показателей
-            workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
+            //workbook = WorkbookFactory.create(fileStorageAPI.openStream(fileDescriptor));
+            InputStream inp = fileStorageAPI.openStream(fileDescriptor);
+            log.info("Stream opened");
+            workbook = new XSSFWorkbook(inp);
+            log.info("Workbook opened");
+
             try {
                 Sheet firstSheet = workbook.getSheetAt(0);
 
