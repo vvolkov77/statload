@@ -47,7 +47,7 @@ public class LoadStat extends StandardLookup<Report> {
 
     @Subscribe
     public void onInit(InitEvent event) {
-        multiUploadField.setPermittedExtensions(Sets.newHashSet(".xls"));
+        multiUploadField.setPermittedExtensions(Sets.newHashSet(".xlsx"));
         multiUploadField.addQueueUploadCompleteListener(queueUploadCompleteEvent -> {
 
                         for (Map.Entry<UUID, String> entry : multiUploadField.getUploadsMap().entrySet()) {
