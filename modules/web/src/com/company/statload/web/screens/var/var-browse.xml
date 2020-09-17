@@ -32,8 +32,6 @@
                 <action id="edit" type="edit"/>
                 <action id="remove" type="remove"/>
                 <action id="refresh" type="refresh"/>
-                <action id="Sync" caption="msg://SyncBtn.Caption" enable="false"/>
-                <action id="FullSync" caption="msg://fullsyncact.Caption"/>
             </actions>
             <columns>
                 <column id="ref_report.name_Short"/>
@@ -53,10 +51,16 @@
                 <button id="editBtn" action="varsTable.edit"/>
                 <button id="removeBtn" action="varsTable.remove"/>
                 <button id="refreshBtn" action="varsTable.refresh"/>
-                <button id="varsTableSyncBtn" action="varsTable.Sync"/>
-                <button id="varsTableFullSyncBtn" action="varsTable.FullSync"/>
+                <popupButton id="btn_refresh_dict" caption="msg://btn_refresh_dict.caption">
+                    <actions>
+                        <action id="Sync" caption="msg://Sync.caption"/>
+                        <action id="FullSync" caption="msg://FullSync.caption"/>
+                    </actions>
+                </popupButton>
             </buttonsPanel>
+
         </groupTable>
+        <popupButton/>
         <hbox id="lookupActions" spacing="true" visible="false">
             <button action="lookupSelectAction"/>
             <button action="lookupCancelAction"/>

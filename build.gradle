@@ -15,7 +15,6 @@ buildscript {
 }
 
 
-
 def modulePrefix = 'app_statload'
 
 def globalModule = project(":${modulePrefix}-global")
@@ -37,7 +36,6 @@ cuba {
 dependencies {
     appComponent("com.haulmont.cuba:cuba-global:$cubaVersion")
 }
-
 
 
 def postgres = 'org.postgresql:postgresql:42.2.9'
@@ -77,7 +75,6 @@ configure(globalModule) {
     }
 
 
-
     entitiesEnhancing {
         main {
             enabled = true
@@ -105,6 +102,7 @@ configure(coreModule) {
         jdbc(postgres)
         testRuntime(postgres)
         jdbc(files("$cuba.tomcat.dir/lib/ojdbc6.jar"))
+        jdbc('com.oracle.database.jdbc:ojdbc6:11.2.0.4')
     }
 
     task cleanConf(description: 'Cleans up conf directory', type: Delete) {
@@ -191,17 +189,16 @@ task restart(dependsOn: ['stop', ":${modulePrefix}-core:deploy", ":${modulePrefi
 }
 
 
-
 restart.finalizedBy start
 
 task buildWar(type: CubaWarBuilding) {
     includeJdbcDriver = true
     appProperties = [
-            'cuba.automaticDatabaseUpdate'        : true,
-            'cuba.webPort'                        : 8082,
-            'cuba.connectionUrlList'              : 'http://localhost:8082/app_statload-core',
-            'cuba.web.productionMode'             : true,
-            'cuba.dataSourceProvider'             : 'jndi'
+            'cuba.automaticDatabaseUpdate': true,
+            'cuba.webPort'                : 8082,
+            'cuba.connectionUrlList'      : 'http://localhost:8082/app_statload-core',
+            'cuba.web.productionMode'     : true,
+            'cuba.dataSourceProvider'     : 'jndi'
     ]
     appHome = '${app.home}'
     includeContextXml = true

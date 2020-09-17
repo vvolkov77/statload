@@ -15,5 +15,12 @@ public interface DBStatSyncService {
 
     String Sync();
 
-    String Sync(String NameSpr);
+    String SyncStatPokaz();
+
+    String SyncStatForm();
+
+    String SyncStatSprav();
+
+    String SyncStatBanks();
+
 }

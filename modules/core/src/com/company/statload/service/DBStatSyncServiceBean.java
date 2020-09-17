@@ -82,7 +82,7 @@ public class DBStatSyncServiceBean implements DBStatSyncService {
                 i = i + 1;
             }
             tx.commit();
-            return "Справочник показателей обновился успешно. Количество импортированных строк " + i;
+            return "Справочник показателей обновился успешно. Количество обновленных строк " + i;
         }
     }
 
@@ -120,7 +120,7 @@ public class DBStatSyncServiceBean implements DBStatSyncService {
                 i = i + 1;
             }
             tx.commit();
-            return "Справочник форм обновился успешно. Количество импортированных строк " + i;
+            return "Справочник форм обновился успешно. Количество обновленных строк " + i;
         }
     }
 
@@ -157,7 +157,7 @@ public class DBStatSyncServiceBean implements DBStatSyncService {
                 i = i + 1;
                 }
             tx.commit();
-            return "Справочник справочников обновился успешно. Количество импортированных строк " + i;
+            return "Справочник справочников обновился успешно. Количество обновленных строк " + i;
         }
     }
 
@@ -198,7 +198,7 @@ public class DBStatSyncServiceBean implements DBStatSyncService {
 
             }
             tx.commit();
-            return "Справочник банков обновился успешно. Количество импортированных строк " + i;
+            return "Справочник банков обновился успешно. Количество обновленных строк " + i;
         }
     }
 
@@ -206,200 +206,205 @@ public class DBStatSyncServiceBean implements DBStatSyncService {
     @Override
     public String Sync(){
         setStatus("");
-      /*  setStatus(Sync("STATFORM"));
-        setStatus(getStatus() + "\n"+Sync("STATPOKAZ"));
-        setStatus(getStatus() + "\n"+Sync("STATSPRAV"));
-        setStatus(getStatus() + "\n"+Sync("STATBANKHISTORY"));*/
+        setStatus(SyncStatPokaz());
+        setStatus(getStatus() + "\n"+SyncStatForm());
+        setStatus(getStatus() + "\n"+SyncStatSprav());
+        setStatus(getStatus() + "\n"+SyncStatBanks());
         return getStatus();
     }
     @Override
-    public String Sync(String NameSpr){
+    public String SyncStatPokaz(){
+        int i = 0;
         try (Transaction tx = persistence.createTransaction()) {
 
-            /*Transaction tx2 = persistence.createTransaction("dbstat");
+            Transaction tx2 = persistence.getTransaction("dbstat");
 
-            EntityManager entityManager = persistence.getEntityManager("dbstat");*/
+            EntityManager entityManager = persistence.getEntityManager("dbstat");
 
-           int i = 0;
-           int rmi = 0;
-            Report u = null;
+            List l = entityManager.createNativeQuery("select id,code_pokaz,id_Form,name_pokaz from stat.s_pokaz where sysdate between dat_beg and nvl(dat_end,to_Date('01.01.4700','dd.mm.yyyy')) and not code_pokaz is null and id_form<>0")
+                    .getResultList();
+            tx2.commit();
+            BigDecimal id_form = null;
+            BigDecimal id_pokaz = null;
+            String code_pokaz = null;
+            String name = "";
+            for (Iterator it = l.iterator(); it.hasNext(); ) {
+                Object[] row = (Object[]) it.next();
+                id_pokaz = (BigDecimal) row[0];
+                code_pokaz = (String) row[1];
+                id_form = (BigDecimal) row[2];
+                name = (String) row[3];
+                StatPokaz F = new StatPokaz();
+                F.setId_form(id_form.longValue());
+                F.setId_pokaz(id_pokaz.longValue());
+                F.setCode(code_pokaz);
+                if (name!=null)
+                    if (code_pokaz.length()+name.length()<=95)
+                        F.setFname(code_pokaz+"("+name+")");
+                    else
+                        F.setFname(code_pokaz+"("+name.substring(0,100-code_pokaz.length()-5)+"...)");
 
-
-            if (NameSpr.equals("STATFORM")) {
+                else
+                    F.setFname(code_pokaz);
+                //StatPokaz F_old = persistence.getEntityManager().find(StatPokaz.class,F.getId_pokaz());
+                StatPokaz F_old = null;
                 try {
+                    F_old = dataManager
+                            .load(StatPokaz.class)
+                            .view("_local")
+                            .query("e.id_pokaz=:id")
 
-                   /*persistence.getEntityManager().createNativeQuery("delete from STATLOAD_STAT_FORM where not id in (select id_stat from STATLOAD_REPORT)")
-                            .executeUpdate();*/
-                    List<StatForm> l1=dataManager.load(StatForm.class)
-                            .view("_minimal")
-                            .list();
-                    for (StatForm r:l1) {
-                        try {
-                            u = dataManager.load(Report.class)
-                                    .query("e.ref_stat_form_id=:rep")
-                                    .parameter("rep", r)
-                                    .view("_local")
-                                    .one();
-                        } catch (Exception e){
-                            u = null;
-                    }
-                        if (u==null) {
-                            log2.debug("Удалил "+r.getShort_name());
-                            persistence.getEntityManager().remove(r);
+                            .parameter("id", F.getId_pokaz())
+                            .one();
 
-                            rmi = rmi + 1;
-                        }
-                    }
-                    try(Transaction tx3 = persistence.createTransaction("dbstat");) {
-
-                        EntityManager en = persistence.getEntityManager("dbstat");
-                        List l = en.createNativeQuery("select id,name,name_form from stat.s_forms where sysdate between dat_beg and nvl(dat_end,to_Date('01.01.4700','dd.mm.yyyy'))")
-                                .getResultList();
-                        tx3.commit();
-                        BigDecimal id_form = null;
-                        String name = null;
-                        String name_form = null;
-                        for (Iterator it = l.iterator(); it.hasNext(); ) {
-                            Object[] row = (Object[]) it.next();
-                            id_form = (BigDecimal) row[0];
-                            name = (String) row[1];
-                            name_form = (String) row[2];
-                            // Проверяем на наличие значений в таблице
-                            /*Query q = persistence.getEntityManager().createNativeQuery("select count(*) from STATLOAD_STAT_FORM where id_form=?  and delete_Ts is null");
-                            q.setParameter("1", id_form);
-                            long count = (long) q.getSingleResult();
-                            if (count == 0) {*/
-                                StatForm F = new StatForm();
-                                F.setId_form(id_form.longValue());
-                                F.setShort_name(name);
-                                F.setLong_name(name_form);
-                                persistence.getEntityManager().persist(F);
-                                i = i + 1;
-                           // }
-                        }
-                        tx3.commit();
-                    }
-                    tx.commit();
-                    return "Справочник форм обновился успешно. Удалено строк "+rmi +".Добавлено строк "+i;
-                } catch(Exception e){
-                    return "Справочник форм не обновился с ошибкой. "+e.getMessage();
+                } catch (Exception e) {
+                    F_old = null;
                 }
-
-/*
-            } else if (NameSpr.equals("STATPOKAZ")) {
-
-                try{
-
-                persistence.getEntityManager().createNativeQuery("delete from STATLOAD_STAT_POKAZ  where not id in (select id_statpokaz from STATLOAD_VAR)")
-                        .executeUpdate();
-
-                List l = entityManager.createNativeQuery("select id,code_pokaz,id_Form from stat.s_pokaz where sysdate between dat_beg and nvl(dat_end,to_Date('01.01.4700','dd.mm.yyyy')) and not code_pokaz is null and id_form<>0")
-                        .getResultList();
-                tx2.commit();
-                BigDecimal id_form = null;
-                BigDecimal id_pokaz = null;
-                String code_pokaz = null;
-                for (Iterator it = l.iterator(); it.hasNext(); ) {
-                    Object[] row = (Object[]) it.next();
-                    id_pokaz = (BigDecimal) row[0];
-                    code_pokaz = (String) row[1];
-                    id_form = (BigDecimal) row[2];
-                    // Проверяем на наличие значений в таблице
-                    Query q = persistence.getEntityManager().createNativeQuery("select count(*) from STATLOAD_STAT_POKAZ where id_pokaz=? and delete_Ts is null");
-                    q.setParameter("1", id_pokaz);
-                    long count = (long) q.getSingleResult();
-                    if (count == 0) {
-                        StatPokaz F = new StatPokaz();
-                        F.setId_form(id_form.longValue());
-                        F.setId_pokaz(id_pokaz.longValue());
-                        F.setCode(code_pokaz);
-                        persistence.getEntityManager().persist(F);
-                        i = i + 1;
-
-                    }
+                if (F_old==null) {
+                    persistence.getEntityManager().persist(F);
+                    i = i + 1;
                 }
-                    tx.commit();
-                    return "Справочник показателей обновился успешно. Количество импортированных строк "+i;
-            } catch(Exception e){
-                return "Справочник показателей не обновился с ошибкой. "+e.getMessage();
             }
 
-
-        } else if (NameSpr.equals("STATSPRAV")) {
-               try {
-
-
-                   persistence.getEntityManager().createNativeQuery("delete from STATLOAD_STAT_SPRAV where not id in (select id_sprav from STATLOAD_VAR)")
-                           .executeUpdate();
-
-                   List l = entityManager.createNativeQuery("select id,a.owner||'.'||name_table name_table  from stat.S_NAME_TABLES t, all_tables a \n" +
-                           "where a.table_name=upper(t.name_table)")
-                           .getResultList();
-                   tx2.commit();
-                   BigDecimal id_ = null;
-                   String name_table = null;
-                   for (Iterator it = l.iterator(); it.hasNext(); ) {
-                       Object[] row = (Object[]) it.next();
-                       id_ = (BigDecimal) row[0];
-                       name_table = (String) row[1];
-
-                       // Проверяем на наличие значений в таблице
-                       Query q = persistence.getEntityManager().createNativeQuery("select count(*) from STATLOAD_STAT_SPRAV where id_table=? and delete_Ts is null");
-                       q.setParameter("1", id_);
-                       long count = (long) q.getSingleResult();
-                       if (count == 0) {
-                           StatSprav F = new StatSprav();
-                           F.setId_table(id_.longValue());
-                           F.setNameTable(name_table.toUpperCase());
-
-                           persistence.getEntityManager().persist(F);
-                           i = i + 1;
-                       }
-                   }
-                   tx.commit();
-                   return "Справочник справочников обновился успешно. Количество импортированных строк "+i;
-            } catch(Exception e){
-                return "Справочник справочников не обновился с ошибкой. "+e.getMessage();
-            }
-
-
-            } else if (NameSpr.equals("STATBANKHISTORY")) {
-                try {
-                    persistence.getEntityManager().createNativeQuery("delete from STATLOAD_STAT_BANK_HISTORY")
-                            .executeUpdate();
-
-                    List l = entityManager.createNativeQuery("select name,mfo,id_bank,region from stat.BANK_HISTORY")
-                            .getResultList();
-                    tx2.commit();
-                    String name = null;
-                    String mfo = null;
-                    BigDecimal idbank = null;
-                    BigDecimal region = null;
-                    for (Iterator it = l.iterator(); it.hasNext(); ) {
-                        Object[] row = (Object[]) it.next();
-                        name = (String) row[0];
-                        mfo = (String) row[1];
-                        idbank = (BigDecimal) row[2];
-                        region = (BigDecimal) row[3];
-                        StatBankHistory F = new StatBankHistory();
-                        F.setName(name);
-                        F.setMfo(mfo);
-                        F.setId_filial(idbank.longValue());
-                        F.setRegion(region.longValue());
-                        persistence.getEntityManager().persist(F);
-                        i = i + 1;
-
-                    }
-                    tx.commit();
-                    return  "Справочник банков обновился успешно. Количество импортированных строк "+i;
-                }catch(Exception e){
-                    return  "Справочник банков не обновился с ошибкой. "+e.getMessage();
-                }
-*/
-            } else return "Не найден обработчик для справочника " + NameSpr;//throw new java.lang.Error("Не найден обработчик для справочника " + NameSpr);
-
+            tx.commit();
+            return "Справочник показателей обновился успешно. Количество импортированных строк " + i;
         }
     }
+
+    @Override
+    public String SyncStatForm(){
+        int i = 0;
+        try (Transaction tx = persistence.createTransaction()) {
+
+            Transaction tx2 = persistence.getTransaction("dbstat");
+
+            EntityManager entityManager = persistence.getEntityManager("dbstat");
+
+            List l = entityManager.createNativeQuery("select id,name,name_form from stat.s_forms where sysdate between dat_beg and nvl(dat_end,to_Date('01.01.4700','dd.mm.yyyy'))")
+                    .getResultList();
+            tx2.commit();
+            BigDecimal id_form = null;
+            String name = null;
+            String name_form = null;
+            for (Iterator it = l.iterator(); it.hasNext(); ) {
+                Object[] row = (Object[]) it.next();
+                id_form = (BigDecimal) row[0];
+                name = (String) row[1];
+                name_form = (String) row[2];
+                StatForm F = new StatForm();
+                F.setId_form(id_form.longValue());
+                F.setShort_name(name);
+                F.setLong_name(name_form);
+                StatForm F_old = null;
+                try {
+                    F_old = dataManager
+                            .load(StatForm.class)
+                            .view("_local")
+                            .query("e.id_form=:id")
+
+                            .parameter("id", F.getId_form())
+                            .one();
+                } catch (Exception e) {
+                    F_old = null;
+                }
+                if (F_old==null) {
+                    persistence.getEntityManager().persist(F);
+                    i = i + 1;
+                }
+            }
+            tx.commit();
+            return "Справочник форм обновился успешно. Количество импортированных строк " + i;
+        }
+    }
+
+
+    @Override
+    public String SyncStatSprav(){
+        int i = 0;
+        try (Transaction tx = persistence.createTransaction()) {
+
+            Transaction tx2 = persistence.getTransaction("dbstat");
+
+            EntityManager entityManager = persistence.getEntityManager("dbstat");
+
+            List l = entityManager.createNativeQuery("select id,a.owner||'.'||a.table_name name_table  from stat.S_NAME_TABLES t, all_tables a \n" +
+                    "where a.table_name=upper(t.name_table)")
+                    .getResultList();
+            tx2.commit();
+            BigDecimal id_ = null;
+            String name_table = null;
+
+            for (Iterator it = l.iterator(); it.hasNext(); ) {
+                Object[] row = (Object[]) it.next();
+                id_ = (BigDecimal) row[0];
+                name_table = (String) row[1];
+                StatSprav F = new StatSprav();
+                F.setId_table(id_.longValue());
+                F.setNameTable(name_table.toUpperCase());
+               // log2.info(id_+" , "+name_table);
+                StatSprav F_old = null;
+                try {
+                    F_old = dataManager
+                            .load(StatSprav.class)
+                            .view("_local")
+                            .query("e.id_table=:id")
+
+                            .parameter("id", F.getId_table())
+                            .one();
+                } catch (Exception e) {
+                    F_old = null;
+                }
+                if (F_old==null) {
+                    persistence.getEntityManager().persist(F);
+                    i = i + 1;
+                }
+            }
+            tx.commit();
+            return "Справочник справочников обновился успешно. Количество импортированных строк " + i;
+        }
+    }
+
+    @Override
+    public String SyncStatBanks(){
+        int i = 0;
+        try (Transaction tx = persistence.createTransaction()) {
+
+            Transaction tx2 = persistence.getTransaction("dbstat");
+
+            EntityManager entityManager = persistence.getEntityManager("dbstat");
+
+
+           persistence.getEntityManager().createNativeQuery("delete from STATLOAD_STAT_BANK_HISTORY")
+                    .executeUpdate();
+
+            List l = entityManager.createNativeQuery("select name,mfo,id_bank,city region from stat.BANK_HISTORY where (id_bank,date_begin) in (select id_bank,max(date_begin) from stat.BANK_HISTORY where date_begin<=sysdate group by id_bank) \n"+
+                    "and date_close is null and not city is null")
+                    .getResultList();
+            tx2.commit();
+            String name = null;
+            String mfo = null;
+            BigDecimal idbank = null;
+            BigDecimal region = null;
+            for (Iterator it = l.iterator(); it.hasNext(); ) {
+                Object[] row = (Object[]) it.next();
+                name = (String) row[0];
+                mfo = (String) row[1];
+                idbank = (BigDecimal) row[2];
+                region = (BigDecimal) row[3];
+                StatBankHistory F = new StatBankHistory();
+                F.setName(name);
+                F.setMfo(mfo);
+                F.setId_filial(idbank.longValue());
+                F.setRegion(region.longValue());
+                persistence.getEntityManager().persist(F);
+                i = i + 1;
+
+            }
+            tx.commit();
+            return "Справочник банков обновился успешно. Количество обновленных строк " + i;
+        }
+    }
+
 
 
     public String getStatus() {

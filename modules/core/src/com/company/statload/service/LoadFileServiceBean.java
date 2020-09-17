@@ -14,6 +14,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.inject.Inject;
 import java.io.IOException;
@@ -279,6 +280,7 @@ public class LoadFileServiceBean implements LoadFileService {
     }
 
     @Override
+    @Transactional("dbstat")
     public boolean fieldisvalid(String field, String sprav){
 /*
    Проверка наличия поля в справочнике
@@ -286,9 +288,9 @@ public class LoadFileServiceBean implements LoadFileService {
    - sprav название таблицы в формате <схема>.<таблица>
    Нужны права доступа к представлению all_tab_cols
  */
-        try (Transaction tx = persistence.createTransaction("dbstat")) {
+      //  try (Transaction tx = persistence.createTransaction("dbstat")) {
 
-            EntityManager entityManager = persistence.getEntityManager("dbstat");
+           // EntityManager entityManager = persistence.getEntityManager("dbstat");
 
             //   отделяем название справочника от схемы. если не удается, то выдаем ошибку
             String s = "";
@@ -299,19 +301,19 @@ public class LoadFileServiceBean implements LoadFileService {
 
 
 
-            BigDecimal l = (BigDecimal) entityManager.createNativeQuery("select count(*) from all_tab_cols where table_name=?tab and owner=?sch and COLUMN_NAME = ?field"
+            BigDecimal l = (BigDecimal) persistence.getEntityManager().createNativeQuery("select count(*) from all_tab_cols where table_name=?tab and owner=?sch and COLUMN_NAME = ?field"
             )
                     .setParameter("tab", tab)
                     .setParameter("sch", s)
                     .setParameter("field", field)
                     .getFirstResult();
 
-            tx.commit();
+         //   tx.commit();
 
             if (l.intValue() == 1) return true;
             else return false;
 
-        }
+       // }
 
     }
 
